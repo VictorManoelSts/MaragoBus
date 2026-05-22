@@ -4,6 +4,9 @@
     "moduleResolution": "node",
     "allowImportingTsExtensions": false,
     "noEmit": false,
-    "esModuleInterop": true
-  }
+    "esModuleInterop": true,
+    "types": ["jest", "@testing-library/jest-dom"]
+  },
+  "include": ["src"],
+  "exclude": []
 }
