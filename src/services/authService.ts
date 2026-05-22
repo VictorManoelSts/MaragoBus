@@ -1,5 +1,5 @@
-import { signInWithEmailAndPassword, signOut, getIdTokenResult } from 'firebase/auth'
-import { doc, getDoc } from 'firebase/firestore'
+import { signInWithEmailAndPassword, signOut, getIdTokenResult, updatePassword } from 'firebase/auth'
+import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
 
 export type Perfil = 'aluno' | 'motorista' | 'admin'
@@ -18,6 +18,11 @@ const ERROS: Record<string, string> = {
   'auth/wrong-password': 'Senha incorreta.',
   'auth/invalid-credential': 'Senha incorreta.',
   'auth/too-many-requests': 'Muitas tentativas. Tente novamente mais tarde.',
+  'auth/network-request-failed': 'Sem conexão. Verifique sua internet.',
+}
+
+const ERROS_TROCA_SENHA: Record<string, string> = {
+  'auth/requires-recent-login': 'Sessão expirada. Faça login novamente.',
   'auth/network-request-failed': 'Sem conexão. Verifique sua internet.',
 }
 
@@ -70,4 +75,29 @@ async function getPerfil(): Promise<Perfil | null> {
   return PERFIS_VALIDOS.includes(perfil!) ? perfil! : null
 }
 
-export const authService = { login, logout, getPerfil, formatarEmail }
+async function trocarSenhaInicial(novaSenha: string): Promise<Perfil> {
+  const user = auth.currentUser
+  if (!user) throw new Error('Usuário não autenticado.')
+
+  try {
+    await updatePassword(user, novaSenha)
+  } catch (err: unknown) {
+    const code = (err as { code?: string }).code ?? ''
+    const message =
+      ERROS_TROCA_SENHA[code] ??
+      (err as Error).message ??
+      'Erro ao trocar senha. Tente novamente.'
+    throw Object.assign(new Error(message), { code })
+  }
+
+  const perfil = await obterPerfil(user.uid)
+
+  if (perfil !== 'admin') {
+    const colecao = perfil === 'motorista' ? 'motoristas' : 'alunos'
+    await updateDoc(doc(db, colecao, user.uid), { primeiroAcesso: false })
+  }
+
+  return perfil
+}
+
+export const authService = { login, logout, getPerfil, formatarEmail, trocarSenhaInicial }

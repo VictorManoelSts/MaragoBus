@@ -5,11 +5,14 @@ const mockSignOut = jest.fn()
 const mockGetIdTokenResult = jest.fn()
 const mockGetDoc = jest.fn()
 const mockDoc = jest.fn()
+const mockUpdatePassword = jest.fn()
+const mockUpdateDoc = jest.fn()
 
 jest.mock('firebase/auth', () => ({
   signInWithEmailAndPassword: (...args: unknown[]) => mockSignInWithEmailAndPassword(...args),
   signOut: (...args: unknown[]) => mockSignOut(...args),
   getIdTokenResult: (...args: unknown[]) => mockGetIdTokenResult(...args),
+  updatePassword: (...args: unknown[]) => mockUpdatePassword(...args),
 }))
 
 jest.mock('@/lib/firebase', () => ({
@@ -20,6 +23,7 @@ jest.mock('@/lib/firebase', () => ({
 jest.mock('firebase/firestore', () => ({
   doc: (...args: unknown[]) => mockDoc(...args),
   getDoc: (...args: unknown[]) => mockGetDoc(...args),
+  updateDoc: (...args: unknown[]) => mockUpdateDoc(...args),
 }))
 
 import { auth } from '@/lib/firebase'
@@ -209,5 +213,96 @@ describe('getPerfil', () => {
 
     const result = await authService.getPerfil()
     expect(result).toBeNull()
+  })
+})
+
+describe('trocarSenhaInicial', () => {
+  afterEach(() => {
+    jest.clearAllMocks()
+    authMock.currentUser = null
+  })
+
+  it('lança erro se não há usuário autenticado', async () => {
+    authMock.currentUser = null
+
+    await expect(authService.trocarSenhaInicial('novaSenha123')).rejects.toMatchObject({
+      message: 'Usuário não autenticado.',
+    })
+  })
+
+  it('chama updatePassword com a nova senha', async () => {
+    const user = makeUser('uid-1')
+    authMock.currentUser = user
+    mockUpdatePassword.mockResolvedValue(undefined)
+    mockGetIdTokenResult.mockResolvedValue(makeTokenResult('aluno'))
+    mockDoc.mockReturnValue('docRef')
+    mockUpdateDoc.mockResolvedValue(undefined)
+
+    await authService.trocarSenhaInicial('novaSenha123')
+
+    expect(mockUpdatePassword).toHaveBeenCalledWith(user, 'novaSenha123')
+  })
+
+  it('chama updateDoc com primeiroAcesso: false na coleção alunos', async () => {
+    const user = makeUser('uid-aluno')
+    authMock.currentUser = user
+    mockUpdatePassword.mockResolvedValue(undefined)
+    mockGetIdTokenResult.mockResolvedValue(makeTokenResult('aluno'))
+    mockDoc.mockReturnValue('docRef')
+    mockUpdateDoc.mockResolvedValue(undefined)
+
+    await authService.trocarSenhaInicial('novaSenha123')
+
+    expect(mockDoc).toHaveBeenCalledWith({}, 'alunos', 'uid-aluno')
+    expect(mockUpdateDoc).toHaveBeenCalledWith('docRef', { primeiroAcesso: false })
+  })
+
+  it('chama updateDoc com primeiroAcesso: false na coleção motoristas', async () => {
+    const user = makeUser('uid-mot')
+    authMock.currentUser = user
+    mockUpdatePassword.mockResolvedValue(undefined)
+    mockGetIdTokenResult.mockResolvedValue(makeTokenResult('motorista'))
+    mockDoc.mockReturnValue('docRef')
+    mockUpdateDoc.mockResolvedValue(undefined)
+
+    await authService.trocarSenhaInicial('novaSenha123')
+
+    expect(mockDoc).toHaveBeenCalledWith({}, 'motoristas', 'uid-mot')
+    expect(mockUpdateDoc).toHaveBeenCalledWith('docRef', { primeiroAcesso: false })
+  })
+
+  it('não chama updateDoc para admin', async () => {
+    const user = makeUser('uid-admin')
+    authMock.currentUser = user
+    mockUpdatePassword.mockResolvedValue(undefined)
+    mockGetIdTokenResult.mockResolvedValue(makeTokenResult('admin'))
+
+    await authService.trocarSenhaInicial('novaSenha123')
+
+    expect(mockUpdateDoc).not.toHaveBeenCalled()
+  })
+
+  it('retorna o perfil do usuário', async () => {
+    const user = makeUser('uid-2')
+    authMock.currentUser = user
+    mockUpdatePassword.mockResolvedValue(undefined)
+    mockGetIdTokenResult.mockResolvedValue(makeTokenResult('motorista'))
+    mockDoc.mockReturnValue('docRef')
+    mockUpdateDoc.mockResolvedValue(undefined)
+
+    const result = await authService.trocarSenhaInicial('novaSenha123')
+
+    expect(result).toBe('motorista')
+  })
+
+  it('rejeita com mensagem amigável para auth/requires-recent-login', async () => {
+    const user = makeUser('uid-3')
+    authMock.currentUser = user
+    const error = Object.assign(new Error(), { code: 'auth/requires-recent-login' })
+    mockUpdatePassword.mockRejectedValue(error)
+
+    await expect(authService.trocarSenhaInicial('novaSenha')).rejects.toMatchObject({
+      message: 'Sessão expirada. Faça login novamente.',
+    })
   })
 })
