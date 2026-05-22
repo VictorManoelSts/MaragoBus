@@ -2,8 +2,128 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if false;
+
+    // ─── Funções auxiliares ────────────────────────────────────────────────
+
+    function isAuthenticated() {
+      return request.auth != null;
     }
+
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.perfil == 'admin';
+    }
+
+    function isMotorista() {
+      return isAuthenticated() && request.auth.token.perfil == 'motorista';
+    }
+
+    function isAluno() {
+      return isAuthenticated() && request.auth.token.perfil == 'aluno';
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ─── Alunos ────────────────────────────────────────────────────────────
+    // Aluno: lê e escreve apenas o próprio documento
+    // Motorista: lê dados básicos para exibir na lista (nome, faculdade, ponto)
+    // Admin: acesso total
+
+    match /alunos/{alunoId} {
+      allow read: if isAdmin() || isMotorista() || isOwner(alunoId);
+      allow write: if isAdmin() || isOwner(alunoId);
+    }
+
+    // ─── Motoristas ────────────────────────────────────────────────────────
+    // Motorista: lê e atualiza o próprio documento (primeiroAcesso, senha)
+    // Admin: acesso total
+
+    match /motoristas/{motoristaId} {
+      allow read: if isAdmin() || isOwner(motoristaId);
+      allow write: if isAdmin() || isOwner(motoristaId);
+    }
+
+    // ─── Reservas ──────────────────────────────────────────────────────────
+    // Aluno: cria e gerencia apenas as próprias reservas
+    // Motorista: lê todas as reservas (lista do dia para o ônibus)
+    // Admin: acesso total
+
+    match /reservas/{reservaId} {
+      allow read: if isAdmin()
+                  || isMotorista()
+                  || (isAluno() && resource.data.alunoId == request.auth.uid);
+
+      allow create: if isAluno()
+                    && request.resource.data.alunoId == request.auth.uid;
+
+      allow update, delete: if isAdmin()
+                            || (isAluno() && resource.data.alunoId == request.auth.uid);
+    }
+
+    // ─── Advertências ──────────────────────────────────────────────────────
+    // Aluno: lê apenas as próprias advertências confirmadas
+    // Admin: acesso total (cria, lê, exclui após suspensão)
+
+    match /advertencias/{advertenciaId} {
+      allow read: if isAdmin()
+                  || (isAluno() && resource.data.alunoId == request.auth.uid);
+
+      allow write: if isAdmin();
+    }
+
+    // ─── Solicitações de advertência ───────────────────────────────────────
+    // Motorista: cria e lê apenas as próprias solicitações
+    // Admin: lê e decide (confirma ou rejeita) todas as solicitações
+
+    match /solicitacoes/{solicitacaoId} {
+      allow read: if isAdmin()
+                  || (isMotorista() && resource.data.motoristaId == request.auth.uid);
+
+      allow create: if isMotorista()
+                    && request.resource.data.motoristaId == request.auth.uid;
+
+      allow update, delete: if isAdmin();
+    }
+
+    // ─── Punições ──────────────────────────────────────────────────────────
+    // Apenas admin visualiza o histórico de punições
+
+    match /punicoes/{punicaoId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── Notificações ──────────────────────────────────────────────────────
+    // Aluno: lê as próprias notificações e marca como lida (update)
+    // Admin: cria e gerencia todas as notificações
+
+    match /notificacoes/{notificacaoId} {
+      allow read: if isAdmin()
+                  || (isAluno() && resource.data.alunoId == request.auth.uid);
+
+      allow create, delete: if isAdmin();
+
+      allow update: if isAdmin()
+                    || (isAluno() && resource.data.alunoId == request.auth.uid);
+    }
+
+    // ─── Feriados ──────────────────────────────────────────────────────────
+    // Qualquer usuário autenticado lê (alunos e motoristas precisam saber)
+    // Admin: cria, edita e remove feriados
+
+    match /feriados/{feriadoId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // ─── Pontos de embarque ────────────────────────────────────────────────
+    // Qualquer usuário autenticado lê (necessário para seleção na reserva)
+    // Admin: gerencia os pontos
+
+    match /pontos/{pontoId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
   }
 }

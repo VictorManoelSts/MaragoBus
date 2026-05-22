@@ -1,3 +1,13 @@
+// Inicialização do Firebase
+// Credenciais obtidas em: console.firebase.google.com
+//   Projeto > Configurações do projeto > Geral > Seus apps > SDK do Firebase
+//
+// Serviços utilizados:
+//   auth      → Authentication (console > Build > Authentication)
+//   db        → Cloud Firestore  (console > Build > Firestore Database)
+//   storage   → Cloud Storage    (console > Build > Storage)
+//   functions → Cloud Functions  (console > Build > Functions)
+
 import { initializeApp } from 'firebase/app'
 import { getAuth, connectAuthEmulator } from 'firebase/auth'
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore'
@@ -18,7 +28,7 @@ const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 export const storage = getStorage(app)
-export const functions = getFunctions(app, 'us-central1')
+export const functions = getFunctions(app, 'southamerica-east1')
 
 if (import.meta.env.DEV) {
   connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true })
