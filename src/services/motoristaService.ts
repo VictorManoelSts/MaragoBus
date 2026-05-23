@@ -105,6 +105,30 @@ async function buscarAlunosDiaSeguinte(
   return buscarPorData(diaSeguinteLocal(agora), filtros)
 }
 
+async function buscarDetalheAluno(
+  alunoId: string,
+  agora: Date
+): Promise<{ aluno: Aluno; pontoEscolhido: string | null }> {
+  const alunoDoc = await getDoc(doc(db, 'alunos', alunoId))
+  if (!alunoDoc.exists()) throw new Error('Aluno não encontrado.')
+
+  const aluno: Aluno = { id: alunoDoc.id, ...(alunoDoc.data() as Omit<Aluno, 'id'>) }
+
+  const reservaSnap = await getDocs(
+    query(
+      collection(db, 'reservas'),
+      where('alunoId', '==', alunoId),
+      where('data', '==', toDataLocal(agora))
+    )
+  )
+
+  const pontoEscolhido = reservaSnap.empty
+    ? null
+    : (reservaSnap.docs[0].data()['pontoEscolhido'] as string)
+
+  return { aluno, pontoEscolhido }
+}
+
 async function solicitarAdvertencia(alunoId: string, motivo: string): Promise<void> {
   const motoristaId = auth.currentUser?.uid
   if (!motoristaId) throw new Error('Não autenticado')
@@ -117,4 +141,4 @@ async function solicitarAdvertencia(alunoId: string, motivo: string): Promise<vo
   })
 }
 
-export const motoristaService = { buscarAlunosHoje, buscarAlunosDiaSeguinte, solicitarAdvertencia }
+export const motoristaService = { buscarAlunosHoje, buscarAlunosDiaSeguinte, buscarDetalheAluno, solicitarAdvertencia }
