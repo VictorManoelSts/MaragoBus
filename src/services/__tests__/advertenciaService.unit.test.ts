@@ -4,17 +4,21 @@ import { TipoAdvertencia } from '@/types/advertencia'
 jest.mock('@/lib/firebase', () => ({ db: {} }))
 
 const mockGetDocs = jest.fn()
+const mockAddDoc = jest.fn()
 const mockQuery = jest.fn()
 const mockCollection = jest.fn()
 const mockWhere = jest.fn()
 const mockOrderBy = jest.fn()
+const mockServerTimestamp = jest.fn(() => 'server-ts')
 
 jest.mock('firebase/firestore', () => ({
-  collection: (...args: unknown[]) => mockCollection(...args),
-  query: (...args: unknown[]) => mockQuery(...args),
-  where: (...args: unknown[]) => mockWhere(...args),
-  orderBy: (...args: unknown[]) => mockOrderBy(...args),
-  getDocs: (...args: unknown[]) => mockGetDocs(...args),
+  collection:      (...args: unknown[]) => mockCollection(...args),
+  query:           (...args: unknown[]) => mockQuery(...args),
+  where:           (...args: unknown[]) => mockWhere(...args),
+  orderBy:         (...args: unknown[]) => mockOrderBy(...args),
+  getDocs:         (...args: unknown[]) => mockGetDocs(...args),
+  addDoc:          (...args: unknown[]) => mockAddDoc(...args),
+  serverTimestamp: (...args: unknown[]) => mockServerTimestamp(...args),
 }))
 
 beforeEach(() => {
@@ -65,5 +69,69 @@ describe('advertenciaService.buscarAdvertencias', () => {
     mockGetDocs.mockResolvedValue({ docs: [] })
     await advertenciaService.buscarAdvertencias('u1')
     expect(mockOrderBy).toHaveBeenCalledWith('data', 'asc')
+  })
+})
+
+// ── aplicarAdvertencia ────────────────────────────────────────────────────────
+
+describe('advertenciaService.aplicarAdvertencia', () => {
+  it('usa a coleção advertencias', async () => {
+    mockAddDoc.mockResolvedValue({ id: 'nova-adv' })
+
+    await advertenciaService.aplicarAdvertencia('aluno-1', 'Falta injustificada', 'admin-99')
+
+    expect(mockCollection).toHaveBeenCalledWith({}, 'advertencias')
+  })
+
+  it('salva o motivo correto', async () => {
+    mockAddDoc.mockResolvedValue({ id: 'nova-adv' })
+
+    await advertenciaService.aplicarAdvertencia('aluno-1', 'Falta injustificada', 'admin-99')
+
+    expect(mockAddDoc).toHaveBeenCalledWith(
+      'col-ref',
+      expect.objectContaining({ motivo: 'Falta injustificada' })
+    )
+  })
+
+  it('salva o alunoId correto', async () => {
+    mockAddDoc.mockResolvedValue({ id: 'nova-adv' })
+
+    await advertenciaService.aplicarAdvertencia('aluno-1', 'Falta', 'admin-99')
+
+    expect(mockAddDoc).toHaveBeenCalledWith(
+      'col-ref',
+      expect.objectContaining({ alunoId: 'aluno-1' })
+    )
+  })
+
+  it('salva o adminId como aplicadaPor', async () => {
+    mockAddDoc.mockResolvedValue({ id: 'nova-adv' })
+
+    await advertenciaService.aplicarAdvertencia('aluno-1', 'Falta', 'admin-99')
+
+    expect(mockAddDoc).toHaveBeenCalledWith(
+      'col-ref',
+      expect.objectContaining({ aplicadaPor: 'admin-99' })
+    )
+  })
+
+  it('salva tipo como Direta', async () => {
+    mockAddDoc.mockResolvedValue({ id: 'nova-adv' })
+
+    await advertenciaService.aplicarAdvertencia('aluno-1', 'Falta', 'admin-99')
+
+    expect(mockAddDoc).toHaveBeenCalledWith(
+      'col-ref',
+      expect.objectContaining({ tipo: TipoAdvertencia.Direta })
+    )
+  })
+
+  it('propaga erro quando addDoc falha', async () => {
+    mockAddDoc.mockRejectedValue(new Error('Permissão negada'))
+
+    await expect(
+      advertenciaService.aplicarAdvertencia('aluno-1', 'Falta', 'admin-99')
+    ).rejects.toThrow('Permissão negada')
   })
 })
