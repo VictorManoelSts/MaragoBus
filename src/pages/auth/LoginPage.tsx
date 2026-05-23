@@ -81,7 +81,7 @@ export function LoginPage() {
       <header className="bg-surface border-b border-thin border-border flex items-center justify-center px-xxxl py-lg">
         <div className="flex flex-col items-center gap-md">
           <img
-            src="/logo-maragogi.png"
+            src="/assets/logo-maragogi.png"
             alt="Prefeitura de Maragogi"
             className="w-logo-lg h-logo-lg object-contain"
           />

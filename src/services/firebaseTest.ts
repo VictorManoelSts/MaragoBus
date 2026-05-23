@@ -9,13 +9,15 @@ import { getStorage, connectStorageEmulator } from 'firebase/storage'
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions'
 
 const TEST_APP_NAME = 'maragobus-test'
-const TEST_PROJECT_ID = 'maragobus'
+const TEST_PROJECT_ID = 'maragobus-dev'
+
+const EMULATOR_HOST = process.env.EMULATOR_HOST ?? 'localhost'
 
 const EMULATOR = {
-  auth: { url: 'http://localhost:9099' },
-  firestore: { host: 'localhost', port: 8080 },
-  storage: { host: 'localhost', port: 9199 },
-  functions: { host: 'localhost', port: 5001 },
+  auth: { url: `http://${EMULATOR_HOST}:9099` },
+  firestore: { host: EMULATOR_HOST, port: 8080 },
+  storage: { host: EMULATOR_HOST, port: 9199 },
+  functions: { host: EMULATOR_HOST, port: 5001 },
 }
 
 const existingApp = getApps().find((app) => app.name === TEST_APP_NAME)

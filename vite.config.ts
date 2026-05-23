@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['logo-maragogi.png'],
+      includeAssets: ['assets/logo-maragogi.png'],
       manifest: {
         name: 'MaragoBus',
         short_name: 'MaragoBus',
@@ -19,12 +19,12 @@ export default defineConfig({
         start_url: '/',
         icons: [
           {
-            src: '/logo-maragogi.png',
+            src: '/assets/logo-maragogi.png',
             sizes: '192x192',
             type: 'image/png',
           },
           {
-            src: '/logo-maragogi.png',
+            src: '/assets/logo-maragogi.png',
             sizes: '512x512',
             type: 'image/png',
           },

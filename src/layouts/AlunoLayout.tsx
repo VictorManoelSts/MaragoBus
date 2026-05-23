@@ -22,7 +22,7 @@ export function AlunoLayout() {
       <header className="bg-surface border-b border-thin border-border
                          flex items-center justify-between px-xxxl py-lg">
         <img
-          src="/logo-maragogi.png"
+          src="/assets/logo-maragogi.png"
           alt="Prefeitura de Maragogi"
           className="w-logo-sm h-logo-sm object-contain"
         />
