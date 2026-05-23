@@ -2,7 +2,9 @@
  * Testes unitários de adminService — sem emulador.
  */
 
-jest.mock('@/lib/firebase', () => ({ db: {} }))
+jest.mock('@/lib/firebase', () => ({ db: {}, storage: {}, functions: {} }))
+jest.mock('firebase/functions', () => ({ httpsCallable: jest.fn() }))
+jest.mock('firebase/storage',   () => ({ ref: jest.fn(), uploadBytes: jest.fn(), getDownloadURL: jest.fn() }))
 
 const mockCollection = jest.fn()
 const mockDoc = jest.fn()

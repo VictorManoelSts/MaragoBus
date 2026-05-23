@@ -1,18 +1,36 @@
 import {
   collection, query, where, getDocs,
   doc, getDoc, updateDoc, writeBatch,
-  orderBy,
+  orderBy, setDoc,
 } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
-import { StatusAluno } from '@/types/aluno'
+import { httpsCallable } from 'firebase/functions'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { db, functions, storage } from '@/lib/firebase'
+import { StatusAluno, ModalidadeAluno } from '@/types/aluno'
 import { TipoAdvertencia } from '@/types/advertencia'
 import type { Aluno } from '@/types/aluno'
 import type { Advertencia } from '@/types/advertencia'
+import type { Ponto } from '@/types/ponto'
 
 export type CamposEditaveis = Pick<Aluno,
   'nome' | 'telefone' | 'endereco' | 'faculdade' | 'curso' |
   'modalidade' | 'semestre' | 'anoConclusao' | 'pontoEmbarquePadrao'
 >
+
+export interface DadosCadastro {
+  nome: string
+  cpf: string
+  senha: string
+  telefone: string
+  endereco: string
+  foto: File | null
+  faculdade: string
+  curso: string
+  modalidade: ModalidadeAluno
+  semestre: number
+  anoConclusao: number
+  pontoEmbarquePadrao: string
+}
 
 export interface ReservaAdmin {
   reservaId: string
@@ -120,12 +138,60 @@ async function editarAluno(alunoId: string, dados: Partial<CamposEditaveis>): Pr
   await updateDoc(doc(db, 'alunos', alunoId), dados)
 }
 
+// ── buscarPontos ──────────────────────────────────────────────────────────────
+
+async function buscarPontos(): Promise<Ponto[]> {
+  const snap = await getDocs(
+    query(collection(db, 'pontos'), where('ativo', '==', true))
+  )
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Ponto, 'id'>) }))
+}
+
+// ── cadastrarAluno ────────────────────────────────────────────────────────────
+
+async function cadastrarAluno(dados: DadosCadastro): Promise<string> {
+  const criarUsuario = httpsCallable<{ cpf: string; senha: string }, { uid: string }>(
+    functions, 'criarUsuario'
+  )
+  const resultado = await criarUsuario({ cpf: dados.cpf, senha: dados.senha })
+  const uid = resultado.data.uid
+
+  let fotoUrl: string | null = null
+  if (dados.foto) {
+    const fotoRef = ref(storage, `alunos/${uid}/foto`)
+    await uploadBytes(fotoRef, dados.foto)
+    fotoUrl = await getDownloadURL(fotoRef)
+  }
+
+  await setDoc(doc(db, 'alunos', uid), {
+    nome: dados.nome,
+    cpf: dados.cpf,
+    telefone: dados.telefone,
+    endereco: dados.endereco,
+    foto: fotoUrl,
+    faculdade: dados.faculdade,
+    curso: dados.curso,
+    modalidade: dados.modalidade,
+    semestre: dados.semestre,
+    anoConclusao: dados.anoConclusao,
+    pontoEmbarquePadrao: dados.pontoEmbarquePadrao,
+    status: StatusAluno.Ativo,
+    dataSuspensao: null,
+    dataReativacao: null,
+    primeiroAcesso: true,
+  })
+
+  return uid
+}
+
 export const adminService = {
   buscarReservasDia,
   buscarDetalheAluno,
   suspenderAluno,
   excluirAluno,
   editarAluno,
+  buscarPontos,
+  cadastrarAluno,
 }
 
 // manter compatibilidade com importações existentes do TipoAdvertencia
