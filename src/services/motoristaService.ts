@@ -1,6 +1,7 @@
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { collection, query, where, getDocs, doc, getDoc, addDoc } from 'firebase/firestore'
+import { auth, db } from '@/lib/firebase'
 import { BUSINESS } from '@/constants/business'
+import { StatusSolicitacao } from '@/types/advertencia'
 import type { Aluno } from '@/types/aluno'
 
 export const MOTORISTA_ERROS = {
@@ -104,4 +105,16 @@ async function buscarAlunosDiaSeguinte(
   return buscarPorData(diaSeguinteLocal(agora), filtros)
 }
 
-export const motoristaService = { buscarAlunosHoje, buscarAlunosDiaSeguinte }
+async function solicitarAdvertencia(alunoId: string, motivo: string): Promise<void> {
+  const motoristaId = auth.currentUser?.uid
+  if (!motoristaId) throw new Error('Não autenticado')
+  await addDoc(collection(db, 'solicitacoes'), {
+    alunoId,
+    motoristaId,
+    motivo,
+    status: StatusSolicitacao.Pendente,
+    data: new Date(),
+  })
+}
+
+export const motoristaService = { buscarAlunosHoje, buscarAlunosDiaSeguinte, solicitarAdvertencia }
