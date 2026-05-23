@@ -1,6 +1,6 @@
 FROM node:20-alpine
 
-RUN apk add --no-cache openjdk17-jre
+RUN apk add --no-cache openjdk21-jre
 
 RUN npm install -g firebase-tools
 
