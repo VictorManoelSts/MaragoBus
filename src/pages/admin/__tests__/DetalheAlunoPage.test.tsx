@@ -131,6 +131,17 @@ describe('DetalheAlunoPage — navegação', () => {
     fireEvent.click(screen.getByRole('button', { name: /voltar/i }))
     expect(mockNavigate).toHaveBeenCalledWith('/admin/alunos')
   })
+
+  it('exibe botão Editar dados', () => {
+    render(<DetalheAlunoPage />)
+    expect(screen.getByRole('button', { name: /editar dados/i })).toBeInTheDocument()
+  })
+
+  it('clicar em Editar dados navega para a rota de edição', () => {
+    render(<DetalheAlunoPage />)
+    fireEvent.click(screen.getByRole('button', { name: /editar dados/i }))
+    expect(mockNavigate).toHaveBeenCalledWith('/admin/alunos/a1/editar')
+  })
 })
 
 // ── Header azul ───────────────────────────────────────────────────────────────

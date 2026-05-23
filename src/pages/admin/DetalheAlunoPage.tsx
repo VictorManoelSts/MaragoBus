@@ -17,6 +17,7 @@ import {
   IconBan,
   IconUserCircle,
   IconSchool,
+  IconEdit,
 } from '@tabler/icons-react'
 import { useAdminDetalheAluno } from '@/hooks/useAdminDetalheAluno'
 import { StatusAluno, ModalidadeAluno } from '@/types/aluno'
@@ -390,6 +391,15 @@ function renderConteudo(
 
       {/* Botões de ação */}
       <div className="flex flex-col gap-md">
+        <button
+          onClick={() => navigate(`/admin/alunos/${aluno.id}/editar`)}
+          className="w-full bg-primary text-white rounded-button py-lg
+                     flex items-center justify-center gap-sm text-body font-medium"
+        >
+          <IconEdit size={14} />
+          Editar dados
+        </button>
+
         <button
           onClick={() => setModalAberto('advertencia')}
           className="w-full border-thick border-warning-text text-warning-text

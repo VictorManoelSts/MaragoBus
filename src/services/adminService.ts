@@ -9,6 +9,11 @@ import { TipoAdvertencia } from '@/types/advertencia'
 import type { Aluno } from '@/types/aluno'
 import type { Advertencia } from '@/types/advertencia'
 
+export type CamposEditaveis = Pick<Aluno,
+  'nome' | 'telefone' | 'endereco' | 'faculdade' | 'curso' |
+  'modalidade' | 'semestre' | 'anoConclusao' | 'pontoEmbarquePadrao'
+>
+
 export interface ReservaAdmin {
   reservaId: string
   aluno: Aluno
@@ -108,11 +113,19 @@ async function excluirAluno(alunoId: string): Promise<void> {
   await batch.commit()
 }
 
+// ── editarAluno ───────────────────────────────────────────────────────────────
+
+async function editarAluno(alunoId: string, dados: Partial<CamposEditaveis>): Promise<void> {
+  if (Object.keys(dados).length === 0) return
+  await updateDoc(doc(db, 'alunos', alunoId), dados)
+}
+
 export const adminService = {
   buscarReservasDia,
   buscarDetalheAluno,
   suspenderAluno,
   excluirAluno,
+  editarAluno,
 }
 
 // manter compatibilidade com importações existentes do TipoAdvertencia
