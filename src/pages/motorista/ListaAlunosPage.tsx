@@ -15,6 +15,7 @@ import {
 import { useMotorista } from '@/hooks/useMotorista'
 import { StatusAluno } from '@/types/aluno'
 import type { AlunoComReserva } from '@/services/motoristaService'
+import { AdvertenciaModal } from '@/components/AdvertenciaModal'
 
 function iniciais(nome: string): string {
   const partes = nome.trim().split(' ')
@@ -44,69 +45,6 @@ function BadgeStatus({ status }: { status: StatusAluno }) {
   )
 }
 
-interface ModalAdvertenciaProps {
-  item: AlunoComReserva
-  onConfirmar: (motivo: string) => Promise<void>
-  onCancelar: () => void
-}
-
-function ModalAdvertencia({ item, onConfirmar, onCancelar }: ModalAdvertenciaProps) {
-  const [motivo, setMotivo] = useState('')
-  const [enviando, setEnviando] = useState(false)
-
-  async function handleConfirmar() {
-    if (!motivo.trim() || enviando) return
-    setEnviando(true)
-    try {
-      await onConfirmar(motivo.trim())
-    } finally {
-      setEnviando(false)
-    }
-  }
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 bg-overlay flex items-center justify-center z-50"
-    >
-      <div className="bg-surface rounded-modal p-huge w-[90%] max-w-sm flex flex-col items-center gap-md">
-        <IconAlertTriangle size={24} className="text-warning-text" />
-        <h2 className="text-title font-medium text-warning-text">Solicitar advertência?</h2>
-        <p className="text-body text-text-secondary text-center">{item.aluno.nome}</p>
-
-        <textarea
-          className="w-full bg-primary-light border-thin border-border rounded-input
-                     px-xl py-lg text-base text-text-primary placeholder:text-text-disabled
-                     outline-none resize-none"
-          rows={3}
-          placeholder="Justificativa obrigatória"
-          value={motivo}
-          onChange={(e) => setMotivo(e.target.value)}
-        />
-
-        <div className="flex gap-md w-full">
-          <button
-            onClick={handleConfirmar}
-            disabled={!motivo.trim() || enviando}
-            className="flex-1 bg-warning-text text-white rounded-button py-lg
-                       text-body font-medium disabled:opacity-50"
-          >
-            Confirmar
-          </button>
-          <button
-            onClick={onCancelar}
-            className="flex-1 border-thick border-border text-text-secondary
-                       rounded-button py-lg text-body font-medium"
-          >
-            Cancelar
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export function ListaAlunosPage() {
   const agora = new Date()
   const {
@@ -127,10 +65,9 @@ export function ListaAlunosPage() {
   const navigate = useNavigate()
   const [modalItem, setModalItem] = useState<AlunoComReserva | null>(null)
 
-  async function handleConfirmarAdvertencia(motivo: string) {
+  async function handleEnviarAdvertencia(motivo: string) {
     if (!modalItem) return
     await solicitarAdvertencia(modalItem.aluno.id, motivo)
-    setModalItem(null)
   }
 
   const faculdadesOrdenadas = Object.keys(alunosAgrupados).sort()
@@ -312,10 +249,10 @@ export function ListaAlunosPage() {
 
       {/* Modal de advertência */}
       {modalItem && (
-        <ModalAdvertencia
-          item={modalItem}
-          onConfirmar={handleConfirmarAdvertencia}
-          onCancelar={() => setModalItem(null)}
+        <AdvertenciaModal
+          nomeAluno={modalItem.aluno.nome}
+          onEnviar={handleEnviarAdvertencia}
+          onFechar={() => setModalItem(null)}
         />
       )}
     </div>

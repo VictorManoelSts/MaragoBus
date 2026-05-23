@@ -22,6 +22,25 @@ jest.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }))
 
+// AdvertenciaModal: renderiza dialog mínimo com callbacks expostos para integração
+jest.mock('@/components/AdvertenciaModal', () => ({
+  AdvertenciaModal: ({
+    nomeAluno,
+    onEnviar,
+    onFechar,
+  }: {
+    nomeAluno: string
+    onEnviar: (m: string) => Promise<void>
+    onFechar: () => void
+  }) => (
+    <div role="dialog" aria-modal="true">
+      <span>{nomeAluno}</span>
+      <button onClick={() => onEnviar('Motivo mock')}>Enviar</button>
+      <button onClick={onFechar}>Fechar</button>
+    </div>
+  ),
+}))
+
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 function makeAluno(id: string, nome: string, faculdade: string, ponto: string): AlunoComReserva {
@@ -250,7 +269,7 @@ describe('ListaAlunosPage — modal de advertência', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
-  it('modal exibe o nome do aluno', () => {
+  it('modal recebe o nome do aluno correto', () => {
     render(<ListaAlunosPage />)
     const [botao] = screen.getAllByRole('button', { name: /adverti|solicit/i })
     fireEvent.click(botao)
@@ -258,59 +277,26 @@ describe('ListaAlunosPage — modal de advertência', () => {
     expect(within(dialog).getByText('Alice Santos')).toBeInTheDocument()
   })
 
-  it('modal tem campo de justificativa', () => {
-    render(<ListaAlunosPage />)
-    const [botao] = screen.getAllByRole('button', { name: /adverti|solicit/i })
-    fireEvent.click(botao)
-    expect(screen.getByPlaceholderText(/justificativa/i)).toBeInTheDocument()
-  })
-
-  it('botão confirmar fica desabilitado quando motivo está vazio', () => {
-    render(<ListaAlunosPage />)
-    const [botao] = screen.getAllByRole('button', { name: /adverti|solicit/i })
-    fireEvent.click(botao)
-    const confirmar = screen.getByRole('button', { name: /confirmar/i })
-    expect(confirmar).toBeDisabled()
-  })
-
-  it('botão confirmar chama solicitarAdvertencia com alunoId e motivo', async () => {
+  it('onEnviar repassa motivo para solicitarAdvertencia com o alunoId correto', async () => {
     mockSolicitarAdvertencia.mockResolvedValue(undefined)
     render(<ListaAlunosPage />)
     const [botao] = screen.getAllByRole('button', { name: /adverti|solicit/i })
     fireEvent.click(botao)
 
-    const textarea = screen.getByPlaceholderText(/justificativa/i)
-    fireEvent.change(textarea, { target: { value: 'Faltou ao embarque' } })
-
-    const confirmar = screen.getByRole('button', { name: /confirmar/i })
-    fireEvent.click(confirmar)
+    fireEvent.click(screen.getByRole('button', { name: /enviar/i }))
 
     await waitFor(() =>
-      expect(mockSolicitarAdvertencia).toHaveBeenCalledWith('a1', 'Faltou ao embarque')
+      expect(mockSolicitarAdvertencia).toHaveBeenCalledWith('a1', 'Motivo mock')
     )
   })
 
-  it('fecha o modal após confirmação bem-sucedida', async () => {
-    mockSolicitarAdvertencia.mockResolvedValue(undefined)
+  it('onFechar fecha o modal', () => {
     render(<ListaAlunosPage />)
     const [botao] = screen.getAllByRole('button', { name: /adverti|solicit/i })
     fireEvent.click(botao)
 
-    const textarea = screen.getByPlaceholderText(/justificativa/i)
-    fireEvent.change(textarea, { target: { value: 'Faltou' } })
-    fireEvent.click(screen.getByRole('button', { name: /confirmar/i }))
-
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-  })
-
-  it('botão cancelar fecha o modal sem chamar o serviço', () => {
-    render(<ListaAlunosPage />)
-    const [botao] = screen.getAllByRole('button', { name: /adverti|solicit/i })
-    fireEvent.click(botao)
-
-    fireEvent.click(screen.getByRole('button', { name: /cancelar/i }))
+    fireEvent.click(screen.getByRole('button', { name: /fechar/i }))
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(mockSolicitarAdvertencia).not.toHaveBeenCalled()
   })
 })
