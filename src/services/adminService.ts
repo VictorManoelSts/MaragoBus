@@ -158,6 +158,31 @@ async function buscarPontos(): Promise<Ponto[]> {
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Ponto, 'id'>) }))
 }
 
+// ── adicionarPonto ────────────────────────────────────────────────────────────
+
+async function adicionarPonto(nome: string): Promise<string> {
+  const ref = await addDoc(collection(db, 'pontos'), { nome, ativo: true })
+  return ref.id
+}
+
+// ── editarPonto ───────────────────────────────────────────────────────────────
+
+async function editarPonto(id: string, nome: string): Promise<void> {
+  await updateDoc(doc(db, 'pontos', id), { nome })
+}
+
+// ── removerPonto ──────────────────────────────────────────────────────────────
+
+async function removerPonto(id: string, nome: string): Promise<void> {
+  const snap = await getDocs(
+    query(collection(db, 'alunos'), where('pontoEmbarquePadrao', '==', nome))
+  )
+  if (!snap.empty) {
+    throw new Error('Ponto em uso. Existem alunos com este ponto como padrão.')
+  }
+  await updateDoc(doc(db, 'pontos', id), { ativo: false })
+}
+
 // ── cadastrarAluno ────────────────────────────────────────────────────────────
 
 async function cadastrarAluno(dados: DadosCadastro): Promise<string> {
@@ -271,6 +296,9 @@ export const adminService = {
   excluirAluno,
   editarAluno,
   buscarPontos,
+  adicionarPonto,
+  editarPonto,
+  removerPonto,
   cadastrarAluno,
   buscarSolicitacoesPendentes,
   confirmarSolicitacao,
