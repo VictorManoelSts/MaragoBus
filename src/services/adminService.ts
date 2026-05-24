@@ -1,16 +1,27 @@
 import {
   collection, query, where, getDocs,
   doc, getDoc, updateDoc, writeBatch,
-  orderBy, setDoc,
+  orderBy, setDoc, addDoc, serverTimestamp,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { db, functions, storage } from '@/lib/firebase'
+import { auth, db, functions, storage } from '@/lib/firebase'
 import { StatusAluno, ModalidadeAluno } from '@/types/aluno'
-import { TipoAdvertencia } from '@/types/advertencia'
+import { StatusSolicitacao, TipoAdvertencia } from '@/types/advertencia'
 import type { Aluno } from '@/types/aluno'
 import type { Advertencia } from '@/types/advertencia'
 import type { Ponto } from '@/types/ponto'
+import type { Timestamp } from 'firebase/firestore'
+
+export interface SolicitacaoComDetalhes {
+  id: string
+  alunoId: string
+  motoristaId: string
+  nomeAluno: string
+  nomeMotorista: string
+  motivo: string
+  data: Timestamp
+}
 
 export type CamposEditaveis = Pick<Aluno,
   'nome' | 'telefone' | 'endereco' | 'faculdade' | 'curso' |
@@ -184,6 +195,75 @@ async function cadastrarAluno(dados: DadosCadastro): Promise<string> {
   return uid
 }
 
+// ── buscarSolicitacoesPendentes ───────────────────────────────────────────────
+
+async function buscarSolicitacoesPendentes(): Promise<SolicitacaoComDetalhes[]> {
+  const snap = await getDocs(
+    query(
+      collection(db, 'solicitacoes'),
+      where('status', '==', StatusSolicitacao.Pendente),
+      orderBy('data', 'desc'),
+    )
+  )
+
+  if (snap.empty) return []
+
+  const itens = snap.docs.map((d) => ({
+    id: d.id,
+    alunoId: d.data()['alunoId'] as string,
+    motoristaId: d.data()['motoristaId'] as string,
+    motivo: d.data()['motivo'] as string,
+    data: d.data()['data'] as Timestamp,
+  }))
+
+  const alunosDocs = await Promise.all(
+    itens.map((s) => getDoc(doc(db, 'alunos', s.alunoId)))
+  )
+  const motoristasDocs = await Promise.all(
+    itens.map((s) => getDoc(doc(db, 'motoristas', s.motoristaId)))
+  )
+
+  return itens.map((s, i) => ({
+    ...s,
+    nomeAluno: alunosDocs[i].exists()
+      ? (alunosDocs[i].data() as { nome: string }).nome
+      : 'Aluno desconhecido',
+    nomeMotorista: motoristasDocs[i].exists()
+      ? (motoristasDocs[i].data() as { nome: string }).nome
+      : 'Motorista desconhecido',
+  }))
+}
+
+// ── confirmarSolicitacao ──────────────────────────────────────────────────────
+
+async function confirmarSolicitacao(
+  id: string,
+  alunoId: string,
+  motivo: string,
+  justificativa: string,
+): Promise<void> {
+  await updateDoc(doc(db, 'solicitacoes', id), {
+    status: StatusSolicitacao.Confirmada,
+    justificativa,
+  })
+  await addDoc(collection(db, 'advertencias'), {
+    alunoId,
+    motivo,
+    aplicadaPor: auth.currentUser?.uid ?? 'admin',
+    tipo: TipoAdvertencia.Solicitacao,
+    data: serverTimestamp(),
+  })
+}
+
+// ── rejeitarSolicitacao ───────────────────────────────────────────────────────
+
+async function rejeitarSolicitacao(id: string, justificativa: string): Promise<void> {
+  await updateDoc(doc(db, 'solicitacoes', id), {
+    status: StatusSolicitacao.Rejeitada,
+    justificativa,
+  })
+}
+
 export const adminService = {
   buscarReservasDia,
   buscarDetalheAluno,
@@ -192,6 +272,9 @@ export const adminService = {
   editarAluno,
   buscarPontos,
   cadastrarAluno,
+  buscarSolicitacoesPendentes,
+  confirmarSolicitacao,
+  rejeitarSolicitacao,
 }
 
 // manter compatibilidade com importações existentes do TipoAdvertencia
