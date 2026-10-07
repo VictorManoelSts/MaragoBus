@@ -1,0 +1,27 @@
+package com.maragogi.maragobus.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.util.UUID;
+
+@Entity
+@Table(name = "cursos")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class Curso {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    @Column(nullable = false, length = 150, unique = true)
+    private String nome;
+
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean ativo = true;
+}
