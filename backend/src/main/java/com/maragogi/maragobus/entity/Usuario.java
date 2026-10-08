@@ -41,7 +41,7 @@ public class Usuario {
 
     @Builder.Default
     @Column(nullable = false)
-    private Boolean ativo = true;
+    private boolean ativo = true;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "tipo_usuario", nullable = false, length = 20)

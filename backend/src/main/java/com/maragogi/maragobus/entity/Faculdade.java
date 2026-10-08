@@ -23,6 +23,6 @@ public class Faculdade {
 
     @Builder.Default
     @Column(nullable = false)
-    private Boolean ativo = true;
+    private boolean ativo = true;
 
 }

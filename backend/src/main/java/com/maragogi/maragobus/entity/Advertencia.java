@@ -21,5 +21,4 @@ public class Advertencia {
     @JoinColumn(name = "solicitacao_advertencia_id", nullable = false, unique = true)
     private SolicitacaoAdvertencia solicitacaoAdvertencia;
 
-
 }
