@@ -1,0 +1,38 @@
+{
+  "name": "maragobus-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.12.0",
+    "npm": ">=10"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:portal": "npm run dev -w @maragobus/portal",
+    "dev:admin": "npm run dev -w @maragobus/admin",
+    "build:portal": "npm run build -w @maragobus/portal",
+    "build:admin": "npm run build -w @maragobus/admin",
+    "build": "npm run build:portal && npm run build:admin",
+    "typecheck": "npm run typecheck --workspaces --if-present && vue-tsc --noEmit -p tsconfig.tests.json",
+    "branding:verify": "node scripts/verify-branding.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.5",
+    "@types/node": "^24.19.2",
+    "@vitejs/plugin-vue": "^6.0.11",
+    "@vue/test-utils": "2.4.11",
+    "jsdom": "^31.0.0",
+    "tailwindcss": "^4.3.5",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0",
+    "vue-tsc": "^3.3.14"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": [
+      "vite/client",
+      "node"
+    ]
+  },
+  "include": [
+    "apps/admin/tests/**/*.ts",
+    "apps/admin/src/**/*.ts",
+    "apps/admin/src/**/*.vue",
+    "apps/portal/tests/**/*.ts",
+    "apps/portal/src/**/*.ts",
+    "apps/portal/src/**/*.vue",
+    "packages/shared/tests/**/*.ts",
+    "packages/shared/src/**/*.ts",
+    "packages/shared/src/**/*.vue",
+    "vitest.config.ts"
+  ]
+}

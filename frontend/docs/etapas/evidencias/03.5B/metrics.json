@@ -1,0 +1,930 @@
+{
+  "browser": "Edg/157.0.4341.46",
+  "capturedAt": "2026-11-12T21:29:51.467Z",
+  "pages": [
+    {
+      "filename": "admin-mobile-fechado.png",
+      "valid": true,
+      "path": "/cursos-ofertados",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "opened": false,
+      "expanded": "false",
+      "controlsMatch": true,
+      "horizontalOverflow": false,
+      "visibleNavigations": 0,
+      "triggerVisible": true,
+      "trigger": {
+        "x": 324,
+        "y": 16,
+        "width": 50,
+        "height": 44,
+        "right": 374,
+        "bottom": 60
+      },
+      "logo": {
+        "x": 16,
+        "y": 16.46875,
+        "width": 176,
+        "height": 43.046875,
+        "right": 192,
+        "bottom": 59.515625
+      },
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 390,
+        "height": 115,
+        "right": 390,
+        "bottom": 115
+      },
+      "main": {
+        "x": 0,
+        "y": 115,
+        "width": 390,
+        "height": 729,
+        "right": 390,
+        "bottom": 844
+      },
+      "card": {
+        "x": 16,
+        "y": 280.578125,
+        "width": 358,
+        "height": 85.1875,
+        "right": 374,
+        "bottom": 365.765625
+      },
+      "drawer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "links": 9,
+      "active": "/cursos-ofertados",
+      "bodyOverflow": "",
+      "htmlOverflow": "",
+      "focused": "BODY",
+      "focusInside": false,
+      "focusOutline": "none",
+      "scroll": {
+        "top": 0,
+        "height": 0,
+        "content": 0
+      },
+      "lastLink": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    {
+      "filename": "admin-mobile-aberto.png",
+      "valid": true,
+      "path": "/cursos-ofertados",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "opened": true,
+      "expanded": "true",
+      "controlsMatch": true,
+      "horizontalOverflow": false,
+      "visibleNavigations": 1,
+      "triggerVisible": true,
+      "trigger": {
+        "x": 324,
+        "y": 16,
+        "width": 50,
+        "height": 44,
+        "right": 374,
+        "bottom": 60
+      },
+      "logo": {
+        "x": 16,
+        "y": 16.46875,
+        "width": 176,
+        "height": 43.046875,
+        "right": 192,
+        "bottom": 59.515625
+      },
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 390,
+        "height": 115,
+        "right": 390,
+        "bottom": 115
+      },
+      "main": {
+        "x": 0,
+        "y": 115,
+        "width": 390,
+        "height": 729,
+        "right": 390,
+        "bottom": 844
+      },
+      "card": {
+        "x": 16,
+        "y": 280.578125,
+        "width": 358,
+        "height": 85.1875,
+        "right": 374,
+        "bottom": 365.765625
+      },
+      "drawer": {
+        "x": 0,
+        "y": 0,
+        "width": 336,
+        "height": 844,
+        "right": 336,
+        "bottom": 844
+      },
+      "links": 9,
+      "active": "/cursos-ofertados",
+      "bodyOverflow": "hidden",
+      "htmlOverflow": "hidden",
+      "focused": "Fechar menu",
+      "focusInside": true,
+      "focusOutline": "none",
+      "scroll": {
+        "top": 0,
+        "height": 767,
+        "content": 767
+      },
+      "lastLink": {
+        "x": 16,
+        "y": 509,
+        "width": 303,
+        "height": 48,
+        "right": 319,
+        "bottom": 557
+      }
+    },
+    {
+      "filename": "admin-mobile-apos-navegar.png",
+      "valid": true,
+      "path": "/alunos",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "opened": false,
+      "expanded": "false",
+      "controlsMatch": true,
+      "horizontalOverflow": false,
+      "visibleNavigations": 0,
+      "triggerVisible": true,
+      "trigger": {
+        "x": 324,
+        "y": 16,
+        "width": 50,
+        "height": 44,
+        "right": 374,
+        "bottom": 60
+      },
+      "logo": {
+        "x": 16,
+        "y": 16.46875,
+        "width": 176,
+        "height": 43.046875,
+        "right": 192,
+        "bottom": 59.515625
+      },
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 390,
+        "height": 115,
+        "right": 390,
+        "bottom": 115
+      },
+      "main": {
+        "x": 0,
+        "y": 115,
+        "width": 390,
+        "height": 729,
+        "right": 390,
+        "bottom": 844
+      },
+      "card": {
+        "x": 16,
+        "y": 280.578125,
+        "width": 358,
+        "height": 85.1875,
+        "right": 374,
+        "bottom": 365.765625
+      },
+      "drawer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "links": 9,
+      "active": "/alunos",
+      "bodyOverflow": "",
+      "htmlOverflow": "",
+      "focused": "admin-content",
+      "focusInside": false,
+      "focusOutline": "none",
+      "scroll": {
+        "top": 0,
+        "height": 0,
+        "content": 0
+      },
+      "lastLink": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    {
+      "filename": "admin-tablet-fechado.png",
+      "valid": true,
+      "path": "/cursos-ofertados",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "opened": false,
+      "expanded": "false",
+      "controlsMatch": true,
+      "horizontalOverflow": false,
+      "visibleNavigations": 0,
+      "triggerVisible": true,
+      "trigger": {
+        "x": 694,
+        "y": 23.4375,
+        "width": 50,
+        "height": 44,
+        "right": 744,
+        "bottom": 67.4375
+      },
+      "logo": {
+        "x": 24,
+        "y": 20,
+        "width": 208,
+        "height": 50.875,
+        "right": 232,
+        "bottom": 70.875
+      },
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 768,
+        "height": 91.875,
+        "right": 768,
+        "bottom": 91.875
+      },
+      "main": {
+        "x": 0,
+        "y": 91.875,
+        "width": 768,
+        "height": 932.125,
+        "right": 768,
+        "bottom": 1024
+      },
+      "card": {
+        "x": 24,
+        "y": 239.859375,
+        "width": 720,
+        "height": 73.65625,
+        "right": 744,
+        "bottom": 313.515625
+      },
+      "drawer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "links": 9,
+      "active": "/cursos-ofertados",
+      "bodyOverflow": "",
+      "htmlOverflow": "",
+      "focused": "BODY",
+      "focusInside": false,
+      "focusOutline": "none",
+      "scroll": {
+        "top": 0,
+        "height": 0,
+        "content": 0
+      },
+      "lastLink": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    {
+      "filename": "admin-tablet-aberto.png",
+      "valid": true,
+      "path": "/cursos-ofertados",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "opened": true,
+      "expanded": "true",
+      "controlsMatch": true,
+      "horizontalOverflow": false,
+      "visibleNavigations": 1,
+      "triggerVisible": true,
+      "trigger": {
+        "x": 694,
+        "y": 23.4375,
+        "width": 50,
+        "height": 44,
+        "right": 744,
+        "bottom": 67.4375
+      },
+      "logo": {
+        "x": 24,
+        "y": 20,
+        "width": 208,
+        "height": 50.875,
+        "right": 232,
+        "bottom": 70.875
+      },
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 768,
+        "height": 91.875,
+        "right": 768,
+        "bottom": 91.875
+      },
+      "main": {
+        "x": 0,
+        "y": 91.875,
+        "width": 768,
+        "height": 932.125,
+        "right": 768,
+        "bottom": 1024
+      },
+      "card": {
+        "x": 24,
+        "y": 239.859375,
+        "width": 720,
+        "height": 73.65625,
+        "right": 744,
+        "bottom": 313.515625
+      },
+      "drawer": {
+        "x": 0,
+        "y": 0,
+        "width": 336,
+        "height": 1024,
+        "right": 336,
+        "bottom": 1024
+      },
+      "links": 9,
+      "active": "/cursos-ofertados",
+      "bodyOverflow": "hidden",
+      "htmlOverflow": "hidden",
+      "focused": "Fechar menu",
+      "focusInside": true,
+      "focusOutline": "none",
+      "scroll": {
+        "top": 0,
+        "height": 947,
+        "content": 947
+      },
+      "lastLink": {
+        "x": 16,
+        "y": 509,
+        "width": 303,
+        "height": 48,
+        "right": 319,
+        "bottom": 557
+      }
+    },
+    {
+      "filename": "admin-apos-breakpoint.png",
+      "valid": true,
+      "path": "/cursos-ofertados",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "opened": false,
+      "expanded": "false",
+      "controlsMatch": true,
+      "horizontalOverflow": false,
+      "visibleNavigations": 1,
+      "triggerVisible": false,
+      "trigger": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "logo": {
+        "x": 32,
+        "y": 20,
+        "width": 208,
+        "height": 50.875,
+        "right": 240,
+        "bottom": 70.875
+      },
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 1009,
+        "height": 91.875,
+        "right": 1009,
+        "bottom": 91.875
+      },
+      "main": {
+        "x": 256,
+        "y": 91.875,
+        "width": 753,
+        "height": 676.125,
+        "right": 1009,
+        "bottom": 768
+      },
+      "card": {
+        "x": 288,
+        "y": 247.859375,
+        "width": 689,
+        "height": 75.59375,
+        "right": 977,
+        "bottom": 323.453125
+      },
+      "drawer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "links": 9,
+      "active": "/cursos-ofertados",
+      "bodyOverflow": "",
+      "htmlOverflow": "",
+      "focused": "admin-content",
+      "focusInside": false,
+      "focusOutline": "solid",
+      "scroll": {
+        "top": 0,
+        "height": 676,
+        "content": 676
+      },
+      "lastLink": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    {
+      "filename": "admin-desktop-menor-fechado.png",
+      "valid": true,
+      "path": "/cursos-ofertados",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "opened": false,
+      "expanded": "false",
+      "controlsMatch": true,
+      "horizontalOverflow": false,
+      "visibleNavigations": 1,
+      "triggerVisible": false,
+      "trigger": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "logo": {
+        "x": 32,
+        "y": 20,
+        "width": 208,
+        "height": 50.875,
+        "right": 240,
+        "bottom": 70.875
+      },
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 1009,
+        "height": 91.875,
+        "right": 1009,
+        "bottom": 91.875
+      },
+      "main": {
+        "x": 256,
+        "y": 91.875,
+        "width": 753,
+        "height": 676.125,
+        "right": 1009,
+        "bottom": 768
+      },
+      "card": {
+        "x": 288,
+        "y": 247.859375,
+        "width": 689,
+        "height": 75.59375,
+        "right": 977,
+        "bottom": 323.453125
+      },
+      "drawer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "links": 9,
+      "active": "/cursos-ofertados",
+      "bodyOverflow": "",
+      "htmlOverflow": "",
+      "focused": "BODY",
+      "focusInside": false,
+      "focusOutline": "none",
+      "scroll": {
+        "top": 0,
+        "height": 676,
+        "content": 676
+      },
+      "lastLink": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    {
+      "filename": "admin-desktop-fechado.png",
+      "valid": true,
+      "path": "/cursos-ofertados",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "opened": false,
+      "expanded": "false",
+      "controlsMatch": true,
+      "horizontalOverflow": false,
+      "visibleNavigations": 1,
+      "triggerVisible": false,
+      "trigger": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "logo": {
+        "x": 32,
+        "y": 20,
+        "width": 208,
+        "height": 50.875,
+        "right": 240,
+        "bottom": 70.875
+      },
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 1425,
+        "height": 91.875,
+        "right": 1425,
+        "bottom": 91.875
+      },
+      "main": {
+        "x": 256,
+        "y": 91.875,
+        "width": 1169,
+        "height": 908.125,
+        "right": 1425,
+        "bottom": 1000
+      },
+      "card": {
+        "x": 288,
+        "y": 247.859375,
+        "width": 1105,
+        "height": 75.59375,
+        "right": 1393,
+        "bottom": 323.453125
+      },
+      "drawer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "links": 9,
+      "active": "/cursos-ofertados",
+      "bodyOverflow": "",
+      "htmlOverflow": "",
+      "focused": "BODY",
+      "focusInside": false,
+      "focusOutline": "none",
+      "scroll": {
+        "top": 0,
+        "height": 908,
+        "content": 908
+      },
+      "lastLink": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    {
+      "filename": "admin-mobile-baixo-fechado.png",
+      "valid": true,
+      "path": "/cursos-ofertados",
+      "viewport": {
+        "width": 390,
+        "height": 420
+      },
+      "opened": false,
+      "expanded": "false",
+      "controlsMatch": true,
+      "horizontalOverflow": false,
+      "visibleNavigations": 0,
+      "triggerVisible": true,
+      "trigger": {
+        "x": 324,
+        "y": 16,
+        "width": 50,
+        "height": 44,
+        "right": 374,
+        "bottom": 60
+      },
+      "logo": {
+        "x": 16,
+        "y": 16.46875,
+        "width": 176,
+        "height": 43.046875,
+        "right": 192,
+        "bottom": 59.515625
+      },
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 390,
+        "height": 115,
+        "right": 390,
+        "bottom": 115
+      },
+      "main": {
+        "x": 0,
+        "y": 115,
+        "width": 390,
+        "height": 305,
+        "right": 390,
+        "bottom": 420
+      },
+      "card": {
+        "x": 16,
+        "y": 280.578125,
+        "width": 358,
+        "height": 85.1875,
+        "right": 374,
+        "bottom": 365.765625
+      },
+      "drawer": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "links": 9,
+      "active": "/cursos-ofertados",
+      "bodyOverflow": "",
+      "htmlOverflow": "",
+      "focused": "BODY",
+      "focusInside": false,
+      "focusOutline": "none",
+      "scroll": {
+        "top": 0,
+        "height": 0,
+        "content": 0
+      },
+      "lastLink": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    {
+      "filename": "admin-mobile-baixo-aberto.png",
+      "valid": true,
+      "path": "/cursos-ofertados",
+      "viewport": {
+        "width": 390,
+        "height": 420
+      },
+      "opened": true,
+      "expanded": "true",
+      "controlsMatch": true,
+      "horizontalOverflow": false,
+      "visibleNavigations": 1,
+      "triggerVisible": true,
+      "trigger": {
+        "x": 324,
+        "y": 16,
+        "width": 50,
+        "height": 44,
+        "right": 374,
+        "bottom": 60
+      },
+      "logo": {
+        "x": 16,
+        "y": 16.46875,
+        "width": 176,
+        "height": 43.046875,
+        "right": 192,
+        "bottom": 59.515625
+      },
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 390,
+        "height": 115,
+        "right": 390,
+        "bottom": 115
+      },
+      "main": {
+        "x": 0,
+        "y": 115,
+        "width": 390,
+        "height": 305,
+        "right": 390,
+        "bottom": 420
+      },
+      "card": {
+        "x": 16,
+        "y": 280.578125,
+        "width": 358,
+        "height": 85.1875,
+        "right": 374,
+        "bottom": 365.765625
+      },
+      "drawer": {
+        "x": 0,
+        "y": 0,
+        "width": 336,
+        "height": 420,
+        "right": 336,
+        "bottom": 420
+      },
+      "links": 9,
+      "active": "/cursos-ofertados",
+      "bodyOverflow": "hidden",
+      "htmlOverflow": "hidden",
+      "focused": "/perfil",
+      "focusInside": true,
+      "focusOutline": "solid",
+      "scroll": {
+        "top": 153,
+        "height": 343,
+        "content": 496
+      },
+      "lastLink": {
+        "x": 16,
+        "y": 356,
+        "width": 303,
+        "height": 48,
+        "right": 319,
+        "bottom": 404
+      }
+    }
+  ],
+  "behaviours": [
+    {
+      "name": "mobile foco inicial",
+      "valid": true
+    },
+    {
+      "name": "mobile fundo inerte",
+      "valid": true
+    },
+    {
+      "name": "mobile Tab permanece no drawer",
+      "valid": true
+    },
+    {
+      "name": "mobile Escape restaura foco",
+      "valid": true
+    },
+    {
+      "name": "mobile Escape libera scroll",
+      "valid": true
+    },
+    {
+      "name": "backdrop restaura foco",
+      "valid": true
+    },
+    {
+      "name": "botão Fechar menu restaura foco",
+      "valid": true
+    },
+    {
+      "name": "navegação fecha drawer e focaliza conteúdo",
+      "valid": true
+    },
+    {
+      "name": "seleção da página atual fecha o drawer",
+      "valid": true
+    },
+    {
+      "name": "tablet foco inicial",
+      "valid": true
+    },
+    {
+      "name": "tablet fundo inerte",
+      "valid": true
+    },
+    {
+      "name": "tablet Tab permanece no drawer",
+      "valid": true
+    },
+    {
+      "name": "tablet Escape restaura foco",
+      "valid": true
+    },
+    {
+      "name": "tablet Escape libera scroll",
+      "valid": true
+    },
+    {
+      "name": "breakpoint fecha e libera foco/scroll",
+      "valid": true
+    },
+    {
+      "name": "mobile-baixo foco inicial",
+      "valid": true
+    },
+    {
+      "name": "mobile-baixo fundo inerte",
+      "valid": true
+    },
+    {
+      "name": "fundo sem rolagem por wheel",
+      "valid": true
+    },
+    {
+      "name": "Shift+Tab chega a Perfil",
+      "valid": true
+    },
+    {
+      "name": "rolagem interna e último destino acessível",
+      "valid": true
+    },
+    {
+      "name": "mobile-baixo Tab permanece no drawer",
+      "valid": true
+    },
+    {
+      "name": "mobile-baixo Escape restaura foco",
+      "valid": true
+    },
+    {
+      "name": "mobile-baixo Escape libera scroll",
+      "valid": true
+    }
+  ]
+}

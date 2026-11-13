@@ -1,0 +1,11 @@
+@import './tokens.css';
+@import './base.css';
+
+/* Subconjunto latino local; sem dependência de Google Fonts em tempo de execução. */
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2');
+}

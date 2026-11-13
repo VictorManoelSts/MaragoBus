@@ -1,0 +1,313 @@
+{
+  "browser": "Edg/157.0.4341.46",
+  "capturedAt": "2026-11-12T21:18:56.488Z",
+  "pages": [
+    {
+      "filename": "admin-desktop.png",
+      "valid": true,
+      "keyboardTrail": [],
+      "path": "/",
+      "title": "Painel administrativo",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "visibleNavigations": 1,
+      "links": [
+        "Visão geral",
+        "Alunos",
+        "Motoristas",
+        "Faculdades",
+        "Cursos",
+        "Cursos ofertados",
+        "Pontos de embarque",
+        "Reservas",
+        "Perfil"
+      ],
+      "active": "/",
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 1425,
+        "height": 91.875,
+        "bottom": 91.875,
+        "right": 1425
+      },
+      "main": {
+        "x": 256,
+        "y": 91.875,
+        "width": 1169,
+        "height": 908.125,
+        "bottom": 1000,
+        "right": 1425
+      },
+      "card": {
+        "x": 288,
+        "y": 247.859375,
+        "width": 1105,
+        "height": 75.59375,
+        "bottom": 323.453125,
+        "right": 1393
+      },
+      "sidebar": {
+        "x": 0,
+        "y": 91.875,
+        "width": 256,
+        "height": 908.125,
+        "bottom": 1000,
+        "right": 256
+      },
+      "scroll": {
+        "top": 0,
+        "height": 908,
+        "content": 908,
+        "overflowY": "auto"
+      },
+      "lastLink": {
+        "x": 16,
+        "y": 523.875,
+        "width": 223,
+        "height": 48,
+        "bottom": 571.875,
+        "right": 239
+      },
+      "mainCount": 1,
+      "focus": "Ir para o conteúdo principal Área administrativaVisão geralAlunosMotoristasFaculdadesCursosCursos ofertadosPontos de embarqueReservasPerfilPainel administrativoGerenciamento do transporte universitário MaragoBusAs funcionalidades administrativas serão implementadas posteriormente.",
+      "focusOutline": "none"
+    },
+    {
+      "filename": "admin-desktop-menor.png",
+      "valid": true,
+      "keyboardTrail": [],
+      "path": "/cursos-ofertados",
+      "title": "Cursos ofertados",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "horizontalOverflow": false,
+      "visibleNavigations": 1,
+      "links": [
+        "Visão geral",
+        "Alunos",
+        "Motoristas",
+        "Faculdades",
+        "Cursos",
+        "Cursos ofertados",
+        "Pontos de embarque",
+        "Reservas",
+        "Perfil"
+      ],
+      "active": "/cursos-ofertados",
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 1009,
+        "height": 91.875,
+        "bottom": 91.875,
+        "right": 1009
+      },
+      "main": {
+        "x": 256,
+        "y": 91.875,
+        "width": 753,
+        "height": 676.125,
+        "bottom": 768,
+        "right": 1009
+      },
+      "card": {
+        "x": 288,
+        "y": 247.859375,
+        "width": 689,
+        "height": 75.59375,
+        "bottom": 323.453125,
+        "right": 977
+      },
+      "sidebar": {
+        "x": 0,
+        "y": 91.875,
+        "width": 256,
+        "height": 676.125,
+        "bottom": 768,
+        "right": 256
+      },
+      "scroll": {
+        "top": 0,
+        "height": 676,
+        "content": 676,
+        "overflowY": "auto"
+      },
+      "lastLink": {
+        "x": 16,
+        "y": 523.875,
+        "width": 223,
+        "height": 48,
+        "bottom": 571.875,
+        "right": 239
+      },
+      "mainCount": 1,
+      "focus": "Ir para o conteúdo principal Área administrativaVisão geralAlunosMotoristasFaculdadesCursosCursos ofertadosPontos de embarqueReservasPerfilCursos ofertadosEspaço para o gerenciamento dos cursos ofertados pelas faculdades.Esta funcionalidade administrativa será desenvolvida posteriormente.",
+      "focusOutline": "none"
+    },
+    {
+      "filename": "admin-mobile.png",
+      "valid": true,
+      "keyboardTrail": [],
+      "path": "/pontos-embarque",
+      "title": "Pontos de embarque",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "visibleNavigations": 0,
+      "links": [
+        "Visão geral",
+        "Alunos",
+        "Motoristas",
+        "Faculdades",
+        "Cursos",
+        "Cursos ofertados",
+        "Pontos de embarque",
+        "Reservas",
+        "Perfil"
+      ],
+      "active": "/pontos-embarque",
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 390,
+        "height": 112.046875,
+        "bottom": 112.046875,
+        "right": 390
+      },
+      "main": {
+        "x": 0,
+        "y": 112.046875,
+        "width": 390,
+        "height": 731.953125,
+        "bottom": 844,
+        "right": 390
+      },
+      "card": {
+        "x": 16,
+        "y": 277.625,
+        "width": 358,
+        "height": 85.1875,
+        "bottom": 362.8125,
+        "right": 374
+      },
+      "sidebar": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "bottom": 0,
+        "right": 0
+      },
+      "scroll": {
+        "top": 0,
+        "height": 0,
+        "content": 0,
+        "overflowY": "auto"
+      },
+      "lastLink": {
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "bottom": 0,
+        "right": 0
+      },
+      "mainCount": 1,
+      "focus": "Ir para o conteúdo principal Área administrativaVisão geralAlunosMotoristasFaculdadesCursosCursos ofertadosPontos de embarqueReservasPerfilPontos de embarqueEspaço para o gerenciamento dos pontos de embarque do transporte universitário.Esta funcionalidade administrativa será desenvolvida posteriormente.",
+      "focusOutline": "none"
+    },
+    {
+      "filename": "admin-desktop-baixo.png",
+      "valid": true,
+      "keyboardTrail": [
+        "Ir para o conteúdo principal",
+        "Visão geral",
+        "Alunos",
+        "Motoristas",
+        "Faculdades",
+        "Cursos",
+        "Cursos ofertados",
+        "Pontos de embarque",
+        "Reservas",
+        "Perfil"
+      ],
+      "path": "/perfil",
+      "title": "Perfil",
+      "viewport": {
+        "width": 1024,
+        "height": 420
+      },
+      "horizontalOverflow": false,
+      "visibleNavigations": 1,
+      "links": [
+        "Visão geral",
+        "Alunos",
+        "Motoristas",
+        "Faculdades",
+        "Cursos",
+        "Cursos ofertados",
+        "Pontos de embarque",
+        "Reservas",
+        "Perfil"
+      ],
+      "active": "/perfil",
+      "header": {
+        "x": 0,
+        "y": 0,
+        "width": 1009,
+        "height": 91.875,
+        "bottom": 91.875,
+        "right": 1009
+      },
+      "main": {
+        "x": 256,
+        "y": 91.875,
+        "width": 753,
+        "height": 328.125,
+        "bottom": 420,
+        "right": 1009
+      },
+      "card": {
+        "x": 288,
+        "y": 247.859375,
+        "width": 689,
+        "height": 75.59375,
+        "bottom": 323.453125,
+        "right": 977
+      },
+      "sidebar": {
+        "x": 0,
+        "y": 91.875,
+        "width": 256,
+        "height": 328.125,
+        "bottom": 420,
+        "right": 256
+      },
+      "scroll": {
+        "top": 168,
+        "height": 328,
+        "content": 496,
+        "overflowY": "auto"
+      },
+      "lastLink": {
+        "x": 16,
+        "y": 355.875,
+        "width": 208,
+        "height": 48,
+        "bottom": 403.875,
+        "right": 224
+      },
+      "mainCount": 1,
+      "focus": "Perfil",
+      "focusOutline": "solid"
+    }
+  ]
+}

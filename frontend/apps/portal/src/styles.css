@@ -1,0 +1,35 @@
+@import "tailwindcss";
+@import "@maragobus/shared/styles.css";
+@source "../../../packages/shared/src";
+
+@layer components {
+  .portal-layout {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .portal-navigation__link {
+    min-height: var(--mb-control-md);
+    color: var(--mb-text-muted);
+    transition: background-color var(--mb-duration), color var(--mb-duration);
+  }
+  .portal-navigation__link[aria-current="page"] {
+    background: var(--mb-secondary);
+    color: var(--mb-on-secondary);
+    font-weight: 600;
+    box-shadow: inset 3px 0 0 var(--mb-identity);
+  }
+  .portal-navigation__link:focus-visible {
+    outline: 2px solid var(--mb-focus);
+    outline-offset: -3px;
+  }
+  @media (hover: hover) {
+    .portal-navigation__link:hover { background: var(--mb-hover); }
+  }
+  .portal-navigation--mobile {
+    padding-bottom: max(var(--mb-space-unit), env(safe-area-inset-bottom, 0px));
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .portal-navigation__link { transition: none; }
+  }
+}
