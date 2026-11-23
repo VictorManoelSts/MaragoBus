@@ -11,6 +11,7 @@ import com.maragogi.maragobus.enums.StatusReserva;
 import com.maragogi.maragobus.enums.TipoUsuario;
 import com.maragogi.maragobus.exception.RegraNegocioException;
 import com.maragogi.maragobus.repository.AdvertenciaRepository;
+import com.maragogi.maragobus.repository.DataSemFuncionamentoRepository;
 import com.maragogi.maragobus.repository.ReservaRepository;
 import com.maragogi.maragobus.repository.SuspensaoRepository;
 import com.maragogi.maragobus.repository.UsuarioRepository;
@@ -29,6 +30,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -49,6 +51,8 @@ class SuspensaoServiceTest {
     private ReservaRepository reservaRepository;
     @Mock
     private UsuarioRepository usuarioRepository;
+    @Mock
+    private DataSemFuncionamentoRepository dataSemFuncionamentoRepository;
 
     private SuspensaoService suspensaoService;
     private Clock clock;
@@ -65,6 +69,7 @@ class SuspensaoServiceTest {
                 suspensaoRepository,
                 reservaRepository,
                 usuarioRepository,
+                dataSemFuncionamentoRepository,
                 regrasSuspensao,
                 clock
         );
@@ -158,6 +163,34 @@ class SuspensaoServiceTest {
 
         assertEquals(StatusReserva.CANCELADA_POR_SUSPENSAO, reservaQuinta.getStatusReserva());
         assertEquals(agora, reservaQuinta.getDataHoraCancelamento());
+    }
+
+    @Test
+    void devePularDatasSemFuncionamentoAoAplicarNovaSuspensao() {
+        Usuario aluno = criarUsuario(TipoUsuario.ALUNO, true);
+        Usuario admin = criarUsuario(TipoUsuario.ADMIN, true);
+        Advertencia advertencia = criarAdvertencia(aluno);
+        // Quarta 07/10 às 09:30, mas Qua 07/10 e Sex 09/10 estão bloqueadas -> 3 dias úteis: Qui 08/10, Seg 12/10, Ter 13/10
+        LocalDateTime agora = LocalDateTime.of(2026, 10, 7, 9, 30);
+
+        when(advertenciaRepository.countBySolicitacaoAdvertenciaAlunoId(aluno.getId())).thenReturn(6L);
+        when(dataSemFuncionamentoRepository.findDatasAPartirDe(LocalDate.of(2026, 10, 7)))
+                .thenReturn(Set.of(LocalDate.of(2026, 10, 7), LocalDate.of(2026, 10, 9)));
+        when(suspensaoRepository.save(any(Suspensao.class))).thenAnswer(inv -> {
+            Suspensao s = inv.getArgument(0);
+            s.setId(UUID.randomUUID());
+            return s;
+        });
+        when(reservaRepository.findByAlunoIdAndStatusReservaAndDataUtilizacaoBetween(
+                aluno.getId(), StatusReserva.CONFIRMADA, LocalDate.of(2026, 10, 8), LocalDate.of(2026, 10, 13)))
+                .thenReturn(List.of());
+
+        Optional<Suspensao> resultado = suspensaoService.avaliarEAplicarPorAdvertencia(advertencia, admin, agora);
+
+        assertTrue(resultado.isPresent());
+        assertEquals(DuracaoSuspensao.TRES_DIAS, resultado.get().getDuracao());
+        assertEquals(LocalDate.of(2026, 10, 8), resultado.get().getDataInicio());
+        assertEquals(LocalDate.of(2026, 10, 13), resultado.get().getDataFim());
     }
 
     @Test

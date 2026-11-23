@@ -29,6 +29,7 @@ class ReservaServiceTest {
     @Mock ReservaRepository reservas;
     @Mock PontoEmbarqueRepository pontos;
     @Mock SuspensaoRepository suspensoes;
+    @Mock DataSemFuncionamentoRepository datasSemFuncionamento;
     private static ValidatorFactory validatorFactory;
     private final Usuario aluno = Usuario.builder().id(UUID.randomUUID()).tipoUsuario(TipoUsuario.ALUNO).build();
     private final PontoEmbarque ponto = PontoEmbarque.builder().id(UUID.randomUUID()).nome("Centro").build();
@@ -41,7 +42,8 @@ class ReservaServiceTest {
 
     private ReservaService service(String agora) {
         Clock clock = Clock.fixed(LocalDateTime.parse(agora).atZone(ZoneId.of("America/Maceio")).toInstant(), ZoneOffset.UTC);
-        var service = new ReservaService(usuarios, perfis, reservas, pontos, suspensoes, new RegrasTemporaisReserva(clock), clock);
+        var service = new ReservaService(usuarios, perfis, reservas, pontos, suspensoes,
+                datasSemFuncionamento, new RegrasTemporaisReserva(clock), clock);
         var factory = new ProxyFactory(service);
         factory.addAdvice(new MethodValidationInterceptor(validatorFactory.getValidator()));
         return (ReservaService) factory.getProxy();
@@ -484,7 +486,8 @@ class ReservaServiceTest {
         when(clock.withZone(ZoneId.of("America/Maceio"))).thenReturn(clock);
         when(clock.getZone()).thenReturn(ZoneId.of("America/Maceio"));
         when(clock.instant()).thenReturn(Instant.parse("2026-10-10T02:59:59Z"), Instant.parse("2026-10-10T03:00:00Z"));
-        var servico = new ReservaService(usuarios, perfis, reservas, pontos, suspensoes, new RegrasTemporaisReserva(clock), clock);
+        var servico = new ReservaService(usuarios, perfis, reservas, pontos, suspensoes,
+                datasSemFuncionamento, new RegrasTemporaisReserva(clock), clock);
         when(usuarios.findById(aluno.getId())).thenReturn(Optional.of(aluno));
         var painel = servico.consultarPainel(aluno.getId());
         assertNull(painel.reservaAtual()); assertNull(painel.proximaReserva());
@@ -555,5 +558,28 @@ class ReservaServiceTest {
     @Test void deveValidarUuidObrigatorioNoHistorico() {
         assertThrows(ConstraintViolationException.class, () -> service("2026-10-12T12:00:00").consultarHistorico(null, 0, 10));
         verifyNoInteractions(usuarios, reservas, perfis, pontos);
+    }
+
+    @Test void deveRejeitarReservaEmDataSemFuncionamento() {
+        perfilDisponivel();
+        when(datasSemFuncionamento.findDatasNoPeriodo(data.minusDays(30), data)).thenReturn(Set.of(data));
+        var erro = assertThrows(RegraNegocioException.class,
+                () -> service("2026-10-09T18:00:00").cadastrar(aluno.getId(), dados));
+        assertEquals("Não há funcionamento do transporte na data informada.", erro.getMessage());
+        verifyNoInteractions(reservas, suspensoes);
+        semPersistencia();
+    }
+
+    @Test void devePermitirReservaComAberturaAntecipadaQuandoDiaAnteriorNaoTemFuncionamento() {
+        LocalDate sexta = LocalDate.of(2026, 10, 16);
+        LocalDate quintaBloqueada = LocalDate.of(2026, 10, 15);
+        perfilDisponivel();
+        salvar();
+        when(datasSemFuncionamento.findDatasNoPeriodo(sexta.minusDays(30), sexta))
+                .thenReturn(Set.of(quintaBloqueada));
+
+        var resposta = service("2026-10-14T17:00:00").cadastrar(aluno.getId(), new CriacaoReservaRequest(sexta));
+        assertEquals(sexta, resposta.dataUtilizacao());
+        assertEquals(StatusReserva.CONFIRMADA, resposta.statusReserva());
     }
 }
