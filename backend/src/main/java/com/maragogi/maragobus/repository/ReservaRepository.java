@@ -88,4 +88,11 @@ public interface ReservaRepository extends JpaRepository<Reserva, UUID> {
             LocalDate dataUtilizacao,
             StatusReserva statusReserva
     );
+
+    List<Reserva> findByAlunoIdAndStatusReservaAndDataUtilizacaoBetween(
+            UUID alunoId,
+            StatusReserva statusReserva,
+            LocalDate dataInicio,
+            LocalDate dataFim
+    );
 }
