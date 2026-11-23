@@ -6,25 +6,27 @@ import com.maragogi.maragobus.dto.solicitacaoadvertencia.RecusaSolicitacaoAdvert
 import com.maragogi.maragobus.dto.solicitacaoadvertencia.AprovacaoSolicitacaoAdvertenciaRequest;
 import com.maragogi.maragobus.dto.solicitacaoadvertencia.AprovacaoSolicitacaoAdvertenciaResponse;
 import com.maragogi.maragobus.entity.Advertencia;
-import com.maragogi.maragobus.repository.AdvertenciaRepository;
+import com.maragogi.maragobus.entity.Suspensao;
 import com.maragogi.maragobus.enums.StatusSolicitacaoAdvertencia;
 import com.maragogi.maragobus.enums.TipoUsuario;
 import com.maragogi.maragobus.exception.RecursoNaoEncontradoException;
 import com.maragogi.maragobus.exception.RegraNegocioException;
+import com.maragogi.maragobus.repository.AdvertenciaRepository;
 import com.maragogi.maragobus.repository.SolicitacaoAdvertenciaRepository;
 import com.maragogi.maragobus.repository.UsuarioRepository;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
-import java.util.UUID;
+
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.UUID;
 
 @Service
 @Validated
@@ -32,13 +34,18 @@ public class AnaliseSolicitacaoAdvertenciaService {
     private final UsuarioRepository usuarioRepository;
     private final SolicitacaoAdvertenciaRepository solicitacaoRepository;
     private final AdvertenciaRepository advertenciaRepository;
+    private final SuspensaoService suspensaoService;
     private final Clock clock;
 
     public AnaliseSolicitacaoAdvertenciaService(UsuarioRepository usuarioRepository,
-            SolicitacaoAdvertenciaRepository solicitacaoRepository, AdvertenciaRepository advertenciaRepository, Clock clock) {
+                                                SolicitacaoAdvertenciaRepository solicitacaoRepository,
+                                                AdvertenciaRepository advertenciaRepository,
+                                                SuspensaoService suspensaoService,
+                                                Clock clock) {
         this.usuarioRepository = usuarioRepository;
         this.solicitacaoRepository = solicitacaoRepository;
         this.advertenciaRepository = advertenciaRepository;
+        this.suspensaoService = suspensaoService;
         this.clock = clock.withZone(ZoneId.of("America/Maceio"));
     }
 
@@ -63,9 +70,10 @@ public class AnaliseSolicitacaoAdvertenciaService {
         }
         return solicitacaoRepository.consultarPorStatus(StatusSolicitacaoAdvertencia.PENDENTE, PageRequest.of(pagina, limite));
     }
+
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public RecusaSolicitacaoAdvertenciaResponse recusar(@NotNull UUID administradorId, @NotNull UUID solicitacaoId,
-                                                       @Valid @NotNull RecusaSolicitacaoAdvertenciaRequest dados) {
+                                                        @Valid @NotNull RecusaSolicitacaoAdvertenciaRequest dados) {
         String observacao = dados.observacaoAnalise();
         if (observacao == null || observacao.isBlank() || observacao.length() > 1000) {
             throw new RegraNegocioException("A justificativa da recusa é obrigatória e deve ter no máximo 1000 caracteres.");
@@ -92,9 +100,10 @@ public class AnaliseSolicitacaoAdvertenciaService {
         return new RecusaSolicitacaoAdvertenciaResponse(solicitacao.getId(), solicitacao.getStatus(),
                 administrador.getId(), agora, solicitacao.getObservacaoAnalise());
     }
+
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public AprovacaoSolicitacaoAdvertenciaResponse aprovar(@NotNull UUID administradorId, @NotNull UUID solicitacaoId,
-                                                          @Valid @NotNull AprovacaoSolicitacaoAdvertenciaRequest dados) {
+                                                           @Valid @NotNull AprovacaoSolicitacaoAdvertenciaRequest dados) {
         String observacao = dados.observacaoAnalise();
         if (observacao != null && (observacao.isBlank() || observacao.length() > 1000)) {
             throw new RegraNegocioException("A observação informada deve conter texto e ter no máximo 1000 caracteres.");
@@ -113,13 +122,30 @@ public class AnaliseSolicitacaoAdvertenciaService {
         if (solicitacao.getStatus() != StatusSolicitacaoAdvertencia.PENDENTE) {
             throw new RegraNegocioException("Somente solicitações pendentes podem ser aprovadas.");
         }
+
+        // Serializa aprovações concorrentes e criação/cancelamento de reservas do mesmo aluno.
+        usuarioRepository.findByIdParaCriarReserva(solicitacao.getAluno().getId())
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Aluno não encontrado."));
+
         var agora = LocalDateTime.now(clock);
         solicitacao.setStatus(StatusSolicitacaoAdvertencia.APROVADA);
         solicitacao.setAdministradorResponsavel(administrador);
         solicitacao.setDataHoraAnalise(agora);
         solicitacao.setObservacaoAnalise(observacao == null ? null : observacao.strip());
-        var advertencia = advertenciaRepository.save(Advertencia.builder().solicitacaoAdvertencia(solicitacao).build());
-        return new AprovacaoSolicitacaoAdvertenciaResponse(solicitacao.getId(), solicitacao.getStatus(),
-                administrador.getId(), agora, solicitacao.getObservacaoAnalise(), advertencia.getId());
+
+        var advertencia = advertenciaRepository.saveAndFlush(
+                Advertencia.builder().solicitacaoAdvertencia(solicitacao).build());
+
+        var suspensao = suspensaoService.avaliarEAplicarPorAdvertencia(advertencia, administrador, agora);
+
+        return new AprovacaoSolicitacaoAdvertenciaResponse(
+                solicitacao.getId(),
+                solicitacao.getStatus(),
+                administrador.getId(),
+                agora,
+                solicitacao.getObservacaoAnalise(),
+                advertencia.getId(),
+                suspensao.map(Suspensao::getId).orElse(null)
+        );
     }
 }

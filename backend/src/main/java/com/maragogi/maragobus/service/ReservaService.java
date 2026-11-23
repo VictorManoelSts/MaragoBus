@@ -6,11 +6,6 @@ import com.maragogi.maragobus.dto.reserva.AtualizacaoPontoEmbarqueReservaRequest
 import com.maragogi.maragobus.dto.reserva.ReservaResponse;
 import com.maragogi.maragobus.dto.reserva.PainelReservasAlunoResponse;
 import com.maragogi.maragobus.dto.reserva.ConfirmacaoProximaReservaResponse;
-import org.springframework.dao.IncorrectResultSizeDataAccessException;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
-import org.slf4j.LoggerFactory;
 import com.maragogi.maragobus.entity.Reserva;
 import com.maragogi.maragobus.enums.StatusReserva;
 import com.maragogi.maragobus.enums.TipoUsuario;
@@ -19,13 +14,20 @@ import com.maragogi.maragobus.exception.RegraNegocioException;
 import com.maragogi.maragobus.repository.PerfilAlunoRepository;
 import com.maragogi.maragobus.repository.PontoEmbarqueRepository;
 import com.maragogi.maragobus.repository.ReservaRepository;
+import com.maragogi.maragobus.repository.SuspensaoRepository;
 import com.maragogi.maragobus.repository.UsuarioRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.IncorrectResultSizeDataAccessException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
+
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -40,21 +42,24 @@ public class ReservaService {
     private final PerfilAlunoRepository perfilAlunoRepository;
     private final ReservaRepository reservaRepository;
     private final PontoEmbarqueRepository pontoEmbarqueRepository;
+    private final SuspensaoRepository suspensaoRepository;
     private final RegrasTemporaisReserva regrasTemporais;
     private final Clock clock;
 
     public ReservaService(UsuarioRepository usuarioRepository, PerfilAlunoRepository perfilAlunoRepository,
                           ReservaRepository reservaRepository, PontoEmbarqueRepository pontoEmbarqueRepository,
-                          RegrasTemporaisReserva regrasTemporais, Clock clock) {
+                          SuspensaoRepository suspensaoRepository, RegrasTemporaisReserva regrasTemporais,
+                          Clock clock) {
         this.usuarioRepository = usuarioRepository;
         this.perfilAlunoRepository = perfilAlunoRepository;
         this.reservaRepository = reservaRepository;
         this.pontoEmbarqueRepository = pontoEmbarqueRepository;
+        this.suspensaoRepository = suspensaoRepository;
         this.regrasTemporais = regrasTemporais;
         this.clock = clock.withZone(ZoneId.of("America/Maceio"));
     }
 
-    // O UUID é um argumento interno, não uma autorização. Autenticação e suspensões estão pendentes.
+    // O UUID é um argumento interno, não uma autorização. Autenticação continua pendente.
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ReservaResponse cadastrar(@NotNull UUID alunoId, @Valid @NotNull CriacaoReservaRequest dados) {
         var aluno = usuarioRepository.findByIdParaCriarReserva(alunoId)
@@ -76,6 +81,9 @@ public class ReservaService {
         }
         if (!regrasTemporais.permiteReservar(dados.dataUtilizacao())) {
             throw new RegraNegocioException("A data de utilização ou o horário está fora da janela de reservas.");
+        }
+        if (suspensaoRepository.existsSuspensaoVigenteParaData(alunoId, dados.dataUtilizacao())) {
+            throw new RegraNegocioException("O aluno está suspenso para a data de utilização informada.");
         }
         if (reservaRepository.existsByAlunoIdAndDataUtilizacaoAndStatusReserva(
                 alunoId, dados.dataUtilizacao(), StatusReserva.CONFIRMADA)) {
@@ -123,9 +131,10 @@ public class ReservaService {
                 reserva.getDataHoraReserva(), reserva.getStatusReserva(),
                 reserva.getPontoEmbarque().getId(), reserva.getPontoEmbarque().getNome(), reserva.getDataHoraCancelamento());
     }
+
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ReservaResponse alterarPontoEmbarque(@NotNull UUID alunoId, @NotNull UUID reservaId,
-                                               @Valid @NotNull AtualizacaoPontoEmbarqueReservaRequest dados) {
+                                                @Valid @NotNull AtualizacaoPontoEmbarqueReservaRequest dados) {
         // Consultar a reserva somente depois de adquirir o mesmo lock da criação e do cancelamento.
         var aluno = usuarioRepository.findByIdParaCriarReserva(alunoId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Usuário não encontrado."));
@@ -159,6 +168,7 @@ public class ReservaService {
                 reserva.getDataHoraReserva(), reserva.getStatusReserva(),
                 ponto.getId(), ponto.getNome(), reserva.getDataHoraCancelamento());
     }
+
     @Transactional(readOnly = true)
     public PainelReservasAlunoResponse consultarPainel(@NotNull UUID alunoId) {
         var aluno = usuarioRepository.findById(alunoId)
@@ -213,5 +223,4 @@ public class ReservaService {
             log.error("Reservas confirmadas duplicadas para aluno {} e data {}", alunoId, data, e);
             throw new RegraNegocioException("Inconsistência: mais de uma reserva confirmada para o aluno e a data.");
         }
-    }
-}
+    }}
