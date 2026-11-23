@@ -5,6 +5,7 @@ import com.maragogi.maragobus.dto.solicitacaoadvertencia.RecusaSolicitacaoAdvert
 import com.maragogi.maragobus.dto.solicitacaoadvertencia.AprovacaoSolicitacaoAdvertenciaRequest;
 import com.maragogi.maragobus.entity.Advertencia;
 import com.maragogi.maragobus.entity.SolicitacaoAdvertencia;
+import com.maragogi.maragobus.entity.Suspensao;
 import com.maragogi.maragobus.entity.Usuario;
 import com.maragogi.maragobus.enums.*;
 import com.maragogi.maragobus.exception.*;
@@ -30,6 +31,7 @@ class AnaliseSolicitacaoAdvertenciaServiceTest {
     @Mock UsuarioRepository usuarios;
     @Mock SolicitacaoAdvertenciaRepository solicitacoes;
     @Mock AdvertenciaRepository advertencias;
+    @Mock SuspensaoService suspensaoService;
     private static ValidatorFactory validador;
     private final Usuario admin = Usuario.builder().id(UUID.randomUUID()).tipoUsuario(TipoUsuario.ADMIN).build();
     private final Usuario aluno = Usuario.builder().id(UUID.randomUUID()).tipoUsuario(TipoUsuario.ALUNO).build();
@@ -38,8 +40,10 @@ class AnaliseSolicitacaoAdvertenciaServiceTest {
 
     @BeforeAll static void abrir() { validador = Validation.buildDefaultValidatorFactory(); }
     @AfterAll static void fechar() { validador.close(); }
+
     private AnaliseSolicitacaoAdvertenciaService service() {
-        var proxy = new ProxyFactory(new AnaliseSolicitacaoAdvertenciaService(usuarios, solicitacoes, advertencias, clock));
+        var proxy = new ProxyFactory(new AnaliseSolicitacaoAdvertenciaService(
+                usuarios, solicitacoes, advertencias, suspensaoService, clock));
         proxy.addAdvice(new MethodValidationInterceptor(validador.getValidator()));
         return (AnaliseSolicitacaoAdvertenciaService) proxy.getProxy();
     }
@@ -87,14 +91,17 @@ class AnaliseSolicitacaoAdvertenciaServiceTest {
         assertThrows(ConstraintViolationException.class, () -> service().consultarPendentes(null, 0, 10));
         verifyNoInteractions(usuarios, solicitacoes);
     }
+
     private SolicitacaoAdvertencia pendente() {
         return SolicitacaoAdvertencia.builder().id(UUID.randomUUID()).aluno(aluno).motoristaSolicitante(motorista)
                 .descricao("  Descrição original\nsem alteração  ").dataHoraSolicitacao(LocalDateTime.parse("2020-01-01T09:00:00")).build();
     }
+
     private void disponivel(SolicitacaoAdvertencia s) {
         when(usuarios.findById(admin.getId())).thenReturn(Optional.of(admin));
         when(solicitacoes.findByIdParaAnalise(s.getId())).thenReturn(Optional.of(s));
     }
+
     private void preservarOriginais(SolicitacaoAdvertencia s) {
         assertSame(aluno, s.getAluno()); assertSame(motorista, s.getMotoristaSolicitante());
         assertEquals("  Descrição original\nsem alteração  ", s.getDescricao());
@@ -172,7 +179,7 @@ class AnaliseSolicitacaoAdvertenciaServiceTest {
     @ParameterizedTest @MethodSource("justificativasInvalidas")
     void deveValidarInvarianteSemProxyEManterSolicitacaoPendente(String motivo) {
         var s = pendente();
-        var direto = new AnaliseSolicitacaoAdvertenciaService(usuarios, solicitacoes, advertencias, clock);
+        var direto = new AnaliseSolicitacaoAdvertenciaService(usuarios, solicitacoes, advertencias, suspensaoService, clock);
         assertThrows(RegraNegocioException.class, () -> direto.recusar(admin.getId(), s.getId(), new RecusaSolicitacaoAdvertenciaRequest(motivo)));
         assertEquals(StatusSolicitacaoAdvertencia.PENDENTE, s.getStatus()); assertNull(s.getAdministradorResponsavel());
         assertNull(s.getDataHoraAnalise()); assertNull(s.getObservacaoAnalise()); preservarOriginais(s);
@@ -185,8 +192,10 @@ class AnaliseSolicitacaoAdvertenciaServiceTest {
                 campo.equals("solicitacao") ? null : UUID.randomUUID(), campo.equals("dados") ? null : new RecusaSolicitacaoAdvertenciaRequest("Motivo")));
         verifyNoInteractions(usuarios, solicitacoes);
     }
+
     private void emitirAdvertencia(SolicitacaoAdvertencia s) {
-        when(advertencias.save(any(Advertencia.class))).thenAnswer(i -> {
+        when(usuarios.findByIdParaCriarReserva(s.getAluno().getId())).thenReturn(Optional.of(s.getAluno()));
+        when(advertencias.saveAndFlush(any(Advertencia.class))).thenAnswer(i -> {
             Advertencia a = i.getArgument(0);
             assertNull(a.getId()); assertSame(s, a.getSolicitacaoAdvertencia());
             assertEquals(StatusSolicitacaoAdvertencia.APROVADA, s.getStatus());
@@ -194,6 +203,9 @@ class AnaliseSolicitacaoAdvertenciaServiceTest {
             assertEquals(LocalDateTime.parse("2026-10-12T17:15:30"), s.getDataHoraAnalise());
             a.setId(UUID.randomUUID()); return a;
         });
+        when(suspensaoService.avaliarEAplicarPorAdvertencia(
+                any(Advertencia.class), eq(admin), eq(LocalDateTime.parse("2026-10-12T17:15:30"))))
+                .thenReturn(Optional.empty());
     }
 
     @ParameterizedTest @NullSource @ValueSource(strings = {"Observação", "  Observação  ", "\tObservação\n"})
@@ -207,10 +219,34 @@ class AnaliseSolicitacaoAdvertenciaServiceTest {
         assertEquals(observacao == null ? null : "Observação", s.getObservacaoAnalise());
         assertEquals(s.getObservacaoAnalise(), resposta.observacaoAnalise());
         assertNotNull(resposta.advertenciaId()); assertNotEquals(id, resposta.advertenciaId());
-        var ordem = inOrder(usuarios, solicitacoes, advertencias);
-        ordem.verify(usuarios).findById(admin.getId()); ordem.verify(solicitacoes).findByIdParaAnalise(id);
-        ordem.verify(advertencias).save(any(Advertencia.class));
-        verifyNoMoreInteractions(usuarios, solicitacoes, advertencias);
+        assertNull(resposta.suspensaoId());
+        var ordem = inOrder(usuarios, solicitacoes, advertencias, suspensaoService);
+        ordem.verify(usuarios).findById(admin.getId());
+        ordem.verify(solicitacoes).findByIdParaAnalise(id);
+        ordem.verify(usuarios).findByIdParaCriarReserva(aluno.getId());
+        ordem.verify(advertencias).saveAndFlush(any(Advertencia.class));
+        ordem.verify(suspensaoService).avaliarEAplicarPorAdvertencia(
+                any(Advertencia.class), eq(admin), eq(LocalDateTime.parse("2026-10-12T17:15:30")));
+        verifyNoMoreInteractions(usuarios, solicitacoes, advertencias, suspensaoService);
+    }
+
+    @Test
+    void deveRetornarSuspensaoIdQuandoAprovacaoGerarSuspensao() {
+        var s = pendente(); disponivel(s);
+        when(usuarios.findByIdParaCriarReserva(aluno.getId())).thenReturn(Optional.of(aluno));
+        when(advertencias.saveAndFlush(any(Advertencia.class))).thenAnswer(i -> {
+            Advertencia a = i.getArgument(0);
+            a.setId(UUID.randomUUID());
+            return a;
+        });
+        UUID suspensaoId = UUID.randomUUID();
+        when(suspensaoService.avaliarEAplicarPorAdvertencia(
+                any(Advertencia.class), eq(admin), eq(LocalDateTime.parse("2026-10-12T17:15:30"))))
+                .thenReturn(Optional.of(Suspensao.builder().id(suspensaoId).build()));
+
+        var resposta = service().aprovar(admin.getId(), s.getId(), new AprovacaoSolicitacaoAdvertenciaRequest("Terceira advertência"));
+
+        assertEquals(suspensaoId, resposta.suspensaoId());
     }
 
     @ParameterizedTest @ValueSource(ints = {1, 1000})
@@ -227,7 +263,9 @@ class AnaliseSolicitacaoAdvertenciaServiceTest {
         var s = pendente(); disponivel(s); emitirAdvertencia(s);
         service().aprovar(admin.getId(), s.getId(), new AprovacaoSolicitacaoAdvertenciaRequest(null));
         preservarOriginais(s); assertEquals(StatusSolicitacaoAdvertencia.APROVADA, s.getStatus());
-        verify(usuarios).findById(admin.getId()); verifyNoMoreInteractions(usuarios);
+        verify(usuarios).findById(admin.getId());
+        verify(usuarios).findByIdParaCriarReserva(aluno.getId());
+        verifyNoMoreInteractions(usuarios);
     }
 
     @ParameterizedTest @ValueSource(strings = {"ausente", "ALUNO", "MOTORISTA", "inativo"})
@@ -237,14 +275,14 @@ class AnaliseSolicitacaoAdvertenciaServiceTest {
         when(usuarios.findById(admin.getId())).thenReturn(caso.equals("ausente") ? Optional.empty() : Optional.of(admin));
         Class<? extends RuntimeException> erro = caso.equals("ausente") ? RecursoNaoEncontradoException.class : RegraNegocioException.class;
         assertThrows(erro, () -> service().aprovar(admin.getId(), UUID.randomUUID(), new AprovacaoSolicitacaoAdvertenciaRequest(null)));
-        verifyNoInteractions(solicitacoes, advertencias); verify(usuarios, never()).save(any());
+        verifyNoInteractions(solicitacoes, advertencias, suspensaoService); verify(usuarios, never()).save(any());
     }
 
     @Test void deveRejeitarSolicitacaoInexistenteNaAprovacao() {
         when(usuarios.findById(admin.getId())).thenReturn(Optional.of(admin)); UUID id = UUID.randomUUID();
         when(solicitacoes.findByIdParaAnalise(id)).thenReturn(Optional.empty());
         assertThrows(RecursoNaoEncontradoException.class, () -> service().aprovar(admin.getId(), id, new AprovacaoSolicitacaoAdvertenciaRequest(null)));
-        verifyNoInteractions(advertencias); verify(solicitacoes).findByIdParaAnalise(id); verifyNoMoreInteractions(solicitacoes);
+        verifyNoInteractions(advertencias, suspensaoService); verify(solicitacoes).findByIdParaAnalise(id); verifyNoMoreInteractions(solicitacoes);
     }
 
     @ParameterizedTest @EnumSource(value = StatusSolicitacaoAdvertencia.class, names = {"APROVADA", "RECUSADA"})
@@ -255,7 +293,7 @@ class AnaliseSolicitacaoAdvertenciaServiceTest {
         assertThrows(RegraNegocioException.class, () -> service().aprovar(admin.getId(), s.getId(), new AprovacaoSolicitacaoAdvertenciaRequest("Nova")));
         assertEquals(status, s.getStatus()); assertSame(anterior, s.getAdministradorResponsavel());
         assertEquals(horario, s.getDataHoraAnalise()); assertEquals("Anterior", s.getObservacaoAnalise());
-        preservarOriginais(s); verifyNoInteractions(advertencias);
+        preservarOriginais(s); verifyNoInteractions(advertencias, suspensaoService);
     }
 
     static Stream<String> observacoesInvalidas() { return Stream.of("", "  ", "\t\n", "\u2003", "x".repeat(1001)); }
@@ -263,22 +301,23 @@ class AnaliseSolicitacaoAdvertenciaServiceTest {
     @ParameterizedTest @MethodSource("observacoesInvalidas")
     void deveExecutarConstraintsJakartaDaObservacaoOpcional(String texto) {
         assertThrows(ConstraintViolationException.class, () -> service().aprovar(admin.getId(), UUID.randomUUID(), new AprovacaoSolicitacaoAdvertenciaRequest(texto)));
-        verifyNoInteractions(usuarios, solicitacoes, advertencias);
+        verifyNoInteractions(usuarios, solicitacoes, advertencias, suspensaoService);
     }
 
     @ParameterizedTest @MethodSource("observacoesInvalidas")
     void deveValidarInvarianteDaObservacaoAntesDeAlterarSolicitacao(String texto) {
-        var s = pendente(); var direto = new AnaliseSolicitacaoAdvertenciaService(usuarios, solicitacoes, advertencias, clock);
+        var s = pendente();
+        var direto = new AnaliseSolicitacaoAdvertenciaService(usuarios, solicitacoes, advertencias, suspensaoService, clock);
         assertThrows(RegraNegocioException.class, () -> direto.aprovar(admin.getId(), s.getId(), new AprovacaoSolicitacaoAdvertenciaRequest(texto)));
         assertEquals(StatusSolicitacaoAdvertencia.PENDENTE, s.getStatus()); assertNull(s.getAdministradorResponsavel());
         assertNull(s.getDataHoraAnalise()); assertNull(s.getObservacaoAnalise()); preservarOriginais(s);
-        verifyNoInteractions(usuarios, solicitacoes, advertencias);
+        verifyNoInteractions(usuarios, solicitacoes, advertencias, suspensaoService);
     }
 
     @ParameterizedTest @ValueSource(strings = {"admin", "solicitacao", "dados"})
     void deveValidarParametrosObrigatoriosNaAprovacao(String campo) {
         assertThrows(ConstraintViolationException.class, () -> service().aprovar(campo.equals("admin") ? null : admin.getId(),
                 campo.equals("solicitacao") ? null : UUID.randomUUID(), campo.equals("dados") ? null : new AprovacaoSolicitacaoAdvertenciaRequest(null)));
-        verifyNoInteractions(usuarios, solicitacoes, advertencias);
+        verifyNoInteractions(usuarios, solicitacoes, advertencias, suspensaoService);
     }
 }

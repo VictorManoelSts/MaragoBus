@@ -28,6 +28,7 @@ class ReservaServiceTest {
     @Mock PerfilAlunoRepository perfis;
     @Mock ReservaRepository reservas;
     @Mock PontoEmbarqueRepository pontos;
+    @Mock SuspensaoRepository suspensoes;
     private static ValidatorFactory validatorFactory;
     private final Usuario aluno = Usuario.builder().id(UUID.randomUUID()).tipoUsuario(TipoUsuario.ALUNO).build();
     private final PontoEmbarque ponto = PontoEmbarque.builder().id(UUID.randomUUID()).nome("Centro").build();
@@ -40,7 +41,7 @@ class ReservaServiceTest {
 
     private ReservaService service(String agora) {
         Clock clock = Clock.fixed(LocalDateTime.parse(agora).atZone(ZoneId.of("America/Maceio")).toInstant(), ZoneOffset.UTC);
-        var service = new ReservaService(usuarios, perfis, reservas, pontos, new RegrasTemporaisReserva(clock), clock);
+        var service = new ReservaService(usuarios, perfis, reservas, pontos, suspensoes, new RegrasTemporaisReserva(clock), clock);
         var factory = new ProxyFactory(service);
         factory.addAdvice(new MethodValidationInterceptor(validatorFactory.getValidator()));
         return (ReservaService) factory.getProxy();
@@ -81,55 +82,66 @@ class ReservaServiceTest {
                 () -> assertEquals(StatusReserva.CONFIRMADA, resposta.statusReserva()),
                 () -> assertEquals(ponto.getId(), resposta.pontoEmbarqueId()),
                 () -> assertEquals("Centro", resposta.pontoEmbarqueNome()));
-        var ordem = inOrder(usuarios, reservas);
+        var ordem = inOrder(usuarios, suspensoes, reservas);
         ordem.verify(usuarios).findByIdParaCriarReserva(aluno.getId());
+        ordem.verify(suspensoes).existsSuspensaoVigenteParaData(aluno.getId(), data);
         ordem.verify(reservas).existsByAlunoIdAndDataUtilizacaoAndStatusReserva(aluno.getId(), data, StatusReserva.CONFIRMADA);
         ordem.verify(reservas).save(any());
+    }
+
+    @Test void deveRejeitarReservaQuandoAlunoEstiverSuspensoParaAData() {
+        perfilDisponivel();
+        when(suspensoes.existsSuspensaoVigenteParaData(aluno.getId(), data)).thenReturn(true);
+        var erro = assertThrows(RegraNegocioException.class,
+                () -> service("2026-10-09T17:00:00").cadastrar(aluno.getId(), dados));
+        assertEquals("O aluno está suspenso para a data de utilização informada.", erro.getMessage());
+        verifyNoInteractions(reservas);
+        semPersistencia();
     }
 
     @Test void deveRejeitarUsuarioInexistente() {
         when(usuarios.findByIdParaCriarReserva(aluno.getId())).thenReturn(Optional.empty());
         assertThrows(RecursoNaoEncontradoException.class, () -> service("2026-10-09T17:00:00").cadastrar(aluno.getId(), dados));
-        verifyNoInteractions(perfis, reservas);
+        verifyNoInteractions(perfis, reservas, suspensoes);
     }
     @ParameterizedTest @EnumSource(value = TipoUsuario.class, names = {"ADMIN", "MOTORISTA"})
     void deveRejeitarUsuarioNaoAluno(TipoUsuario tipo) {
         aluno.setTipoUsuario(tipo); alunoDisponivel();
         assertThrows(RegraNegocioException.class, () -> service("2026-10-09T17:00:00").cadastrar(aluno.getId(), dados));
-        verifyNoInteractions(perfis, reservas);
+        verifyNoInteractions(perfis, reservas, suspensoes);
     }
     @Test void deveRejeitarAlunoInativo() {
         aluno.setAtivo(false); alunoDisponivel();
         assertThrows(RegraNegocioException.class, () -> service("2026-10-09T17:00:00").cadastrar(aluno.getId(), dados));
-        assertFalse(aluno.isAtivo()); verifyNoInteractions(perfis, reservas);
+        assertFalse(aluno.isAtivo()); verifyNoInteractions(perfis, reservas, suspensoes);
     }
     @Test void deveRejeitarPerfilInexistente() {
         alunoDisponivel(); when(perfis.findByUsuarioId(aluno.getId())).thenReturn(Optional.empty());
         assertThrows(RecursoNaoEncontradoException.class, () -> service("2026-10-09T17:00:00").cadastrar(aluno.getId(), dados));
-        semPersistencia();
+        verifyNoInteractions(suspensoes); semPersistencia();
     }
     @Test void deveRejeitarPontoAusente() {
         perfil.setPontoEmbarquePadrao(null); perfilDisponivel();
         assertThrows(RegraNegocioException.class, () -> service("2026-10-09T17:00:00").cadastrar(aluno.getId(), dados));
-        semPersistencia(); assertNull(perfil.getPontoEmbarquePadrao());
+        verifyNoInteractions(suspensoes); semPersistencia(); assertNull(perfil.getPontoEmbarquePadrao());
     }
     @Test void deveRejeitarPontoInativo() {
         ponto.setAtivo(false); perfilDisponivel();
         assertThrows(RegraNegocioException.class, () -> service("2026-10-09T17:00:00").cadastrar(aluno.getId(), dados));
-        semPersistencia(); assertFalse(ponto.isAtivo());
+        verifyNoInteractions(suspensoes); semPersistencia(); assertFalse(ponto.isAtivo());
     }
     @ParameterizedTest @ValueSource(strings = {"2026-10-09T16:59:59", "2026-10-12T11:00:00", "2026-10-13T08:00:00"})
     void deveRejeitarForaDaJanela(String agora) {
         perfilDisponivel();
         assertThrows(RegraNegocioException.class, () -> service(agora).cadastrar(aluno.getId(), dados));
-        verifyNoInteractions(reservas); semPersistencia();
+        verifyNoInteractions(reservas, suspensoes); semPersistencia();
     }
     @ParameterizedTest @ValueSource(strings = {"2026-10-10", "2026-10-11", "2026-10-19"})
     void deveRejeitarDatasInvalidasOuForaDaJanela(String utilizacao) {
         perfilDisponivel();
         assertThrows(RegraNegocioException.class, () -> service("2026-10-09T18:00:00").cadastrar(aluno.getId(),
                 new CriacaoReservaRequest(LocalDate.parse(utilizacao))));
-        verifyNoInteractions(reservas); semPersistencia();
+        verifyNoInteractions(reservas, suspensoes); semPersistencia();
     }
     @Test void deveRejeitarConfirmadaDuplicada() {
         perfilDisponivel();
@@ -152,7 +164,7 @@ class ReservaServiceTest {
         assertThrows(ConstraintViolationException.class, () -> service("2026-10-09T17:00:00").cadastrar(
                 campo.equals("aluno") ? null : aluno.getId(),
                 campo.equals("dados") ? null : new CriacaoReservaRequest(campo.equals("data") ? null : data)));
-        verifyNoInteractions(usuarios, perfis, reservas);
+        verifyNoInteractions(usuarios, perfis, reservas, suspensoes);
     }
 
     private Reserva reservaConfirmada() {
@@ -263,6 +275,7 @@ class ReservaServiceTest {
                 .cancelar(alunoNulo ? null : aluno.getId(), alunoNulo ? UUID.randomUUID() : null));
         verifyNoInteractions(usuarios, reservas, perfis);
     }
+
     @ParameterizedTest
     @ValueSource(strings = {"2026-10-09T17:00:00", "2026-10-10T12:00:00", "2026-10-11T12:00:00", "2026-10-12T10:59:59.999999999"})
     void deveAlterarSomentePontoPreservandoPerfilEDadosOriginais(String agora) {
@@ -377,6 +390,7 @@ class ReservaServiceTest {
                 campo.equals("dados") ? null : new AtualizacaoPontoEmbarqueReservaRequest(campo.equals("ponto") ? null : ponto.getId())));
         verifyNoInteractions(usuarios, reservas, pontos, perfis);
     }
+
     @ParameterizedTest @ValueSource(strings = {"2026-10-12T08:00:00", "2026-10-12T11:00:00", "2026-10-12T16:00:00", "2026-10-12T17:00:00", "2026-10-12T23:59:59", "2026-10-12T00:00:00"})
     void deveManterReservaAtualDuranteTodoODia(String agora) {
         when(usuarios.findById(aluno.getId())).thenReturn(Optional.of(aluno));
@@ -451,6 +465,7 @@ class ReservaServiceTest {
         assertThrows(ConstraintViolationException.class, () -> service("2026-10-12T18:00:00").consultarPainel(null));
         verifyNoInteractions(usuarios, reservas, perfis, pontos);
     }
+
     @ParameterizedTest @EnumSource(value = StatusReserva.class, names = {"CANCELADA_PELO_ALUNO", "CANCELADA_POR_SUSPENSAO"})
     void deveConsultarApenasConfirmadasSemModificarCanceladas(StatusReserva status) {
         when(usuarios.findById(aluno.getId())).thenReturn(Optional.of(aluno));
@@ -469,7 +484,7 @@ class ReservaServiceTest {
         when(clock.withZone(ZoneId.of("America/Maceio"))).thenReturn(clock);
         when(clock.getZone()).thenReturn(ZoneId.of("America/Maceio"));
         when(clock.instant()).thenReturn(Instant.parse("2026-10-10T02:59:59Z"), Instant.parse("2026-10-10T03:00:00Z"));
-        var servico = new ReservaService(usuarios, perfis, reservas, pontos, new RegrasTemporaisReserva(clock), clock);
+        var servico = new ReservaService(usuarios, perfis, reservas, pontos, suspensoes, new RegrasTemporaisReserva(clock), clock);
         when(usuarios.findById(aluno.getId())).thenReturn(Optional.of(aluno));
         var painel = servico.consultarPainel(aluno.getId());
         assertNull(painel.reservaAtual()); assertNull(painel.proximaReserva());
@@ -478,6 +493,7 @@ class ReservaServiceTest {
         verify(reservas).findByAlunoIdAndDataUtilizacaoAndStatusReserva(aluno.getId(), data, StatusReserva.CONFIRMADA);
         verifyNoMoreInteractions(reservas);
     }
+
     @ParameterizedTest
     @CsvSource({"0,10,25,10", "1,10,25,10", "2,10,25,5", "3,10,25,0", "0,50,51,50", "0,,0,0", "0,,1,1"})
     void devePaginarHistoricoPreservandoMetadadosEOrdenacao(int pagina, Integer tamanho, int total, int quantidade) {
