@@ -11,6 +11,7 @@ import com.maragogi.maragobus.enums.TipoUsuario;
 import com.maragogi.maragobus.exception.RecursoNaoEncontradoException;
 import com.maragogi.maragobus.exception.RegraNegocioException;
 import com.maragogi.maragobus.repository.AdvertenciaRepository;
+import com.maragogi.maragobus.repository.DataSemFuncionamentoRepository;
 import com.maragogi.maragobus.repository.ReservaRepository;
 import com.maragogi.maragobus.repository.SuspensaoRepository;
 import com.maragogi.maragobus.repository.UsuarioRepository;
@@ -27,6 +28,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -36,6 +38,7 @@ public class SuspensaoService {
     private final SuspensaoRepository suspensaoRepository;
     private final ReservaRepository reservaRepository;
     private final UsuarioRepository usuarioRepository;
+    private final DataSemFuncionamentoRepository dataSemFuncionamentoRepository;
     private final RegrasTemporaisSuspensao regrasTemporaisSuspensao;
     private final Clock clock;
 
@@ -43,12 +46,14 @@ public class SuspensaoService {
                             SuspensaoRepository suspensaoRepository,
                             ReservaRepository reservaRepository,
                             UsuarioRepository usuarioRepository,
+                            DataSemFuncionamentoRepository dataSemFuncionamentoRepository,
                             RegrasTemporaisSuspensao regrasTemporaisSuspensao,
                             Clock clock) {
         this.advertenciaRepository = advertenciaRepository;
         this.suspensaoRepository = suspensaoRepository;
         this.reservaRepository = reservaRepository;
         this.usuarioRepository = usuarioRepository;
+        this.dataSemFuncionamentoRepository = dataSemFuncionamentoRepository;
         this.regrasTemporaisSuspensao = regrasTemporaisSuspensao;
         this.clock = clock.withZone(ZoneId.of("America/Maceio"));
     }
@@ -70,9 +75,11 @@ public class SuspensaoService {
             return Optional.empty();
         }
 
+        Set<LocalDate> datasBloqueadas = dataSemFuncionamentoRepository.findDatasAPartirDe(
+                dataHoraAplicacao.toLocalDate());
         DuracaoSuspensao duracao = regrasTemporaisSuspensao.calcularDuracao(totalAdvertencias);
-        LocalDate dataInicio = regrasTemporaisSuspensao.calcularDataInicio(dataHoraAplicacao);
-        LocalDate dataFim = regrasTemporaisSuspensao.calcularDataFim(dataInicio, duracao);
+        LocalDate dataInicio = regrasTemporaisSuspensao.calcularDataInicio(dataHoraAplicacao, datasBloqueadas);
+        LocalDate dataFim = regrasTemporaisSuspensao.calcularDataFim(dataInicio, duracao, datasBloqueadas);
 
         Suspensao suspensao = Suspensao.builder()
                 .advertenciaOrigem(advertencia)
