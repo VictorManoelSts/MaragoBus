@@ -49,4 +49,16 @@ public interface SuspensaoRepository extends JpaRepository<Suspensao, UUID> {
     Page<Suspensao> consultarTodas(@Param("apenasVigentes") boolean apenasVigentes,
                                    @Param("hoje") LocalDate hoje,
                                    Pageable pageable);
+
+    @EntityGraph(attributePaths = {
+            "advertenciaOrigem",
+            "advertenciaOrigem.solicitacaoAdvertencia",
+            "advertenciaOrigem.solicitacaoAdvertencia.aluno"
+    })
+    @Query("""
+            select s from Suspensao s
+            where :data between s.dataInicio and s.dataFim
+            order by s.dataInicio asc, s.id asc
+            """)
+    List<Suspensao> findSuspensoesQueCobremData(@Param("data") LocalDate data);
 }
