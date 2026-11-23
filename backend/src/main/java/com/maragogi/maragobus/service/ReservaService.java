@@ -11,6 +11,7 @@ import com.maragogi.maragobus.enums.StatusReserva;
 import com.maragogi.maragobus.enums.TipoUsuario;
 import com.maragogi.maragobus.exception.RecursoNaoEncontradoException;
 import com.maragogi.maragobus.exception.RegraNegocioException;
+import com.maragogi.maragobus.repository.DataSemFuncionamentoRepository;
 import com.maragogi.maragobus.repository.PerfilAlunoRepository;
 import com.maragogi.maragobus.repository.PontoEmbarqueRepository;
 import com.maragogi.maragobus.repository.ReservaRepository;
@@ -32,6 +33,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -43,18 +45,21 @@ public class ReservaService {
     private final ReservaRepository reservaRepository;
     private final PontoEmbarqueRepository pontoEmbarqueRepository;
     private final SuspensaoRepository suspensaoRepository;
+    private final DataSemFuncionamentoRepository dataSemFuncionamentoRepository;
     private final RegrasTemporaisReserva regrasTemporais;
     private final Clock clock;
 
     public ReservaService(UsuarioRepository usuarioRepository, PerfilAlunoRepository perfilAlunoRepository,
                           ReservaRepository reservaRepository, PontoEmbarqueRepository pontoEmbarqueRepository,
-                          SuspensaoRepository suspensaoRepository, RegrasTemporaisReserva regrasTemporais,
-                          Clock clock) {
+                          SuspensaoRepository suspensaoRepository,
+                          DataSemFuncionamentoRepository dataSemFuncionamentoRepository,
+                          RegrasTemporaisReserva regrasTemporais, Clock clock) {
         this.usuarioRepository = usuarioRepository;
         this.perfilAlunoRepository = perfilAlunoRepository;
         this.reservaRepository = reservaRepository;
         this.pontoEmbarqueRepository = pontoEmbarqueRepository;
         this.suspensaoRepository = suspensaoRepository;
+        this.dataSemFuncionamentoRepository = dataSemFuncionamentoRepository;
         this.regrasTemporais = regrasTemporais;
         this.clock = clock.withZone(ZoneId.of("America/Maceio"));
     }
@@ -79,7 +84,12 @@ public class ReservaService {
         if (!ponto.isAtivo()) {
             throw new RegraNegocioException("O ponto de embarque está inativo.");
         }
-        if (!regrasTemporais.permiteReservar(dados.dataUtilizacao())) {
+        Set<LocalDate> datasBloqueadas = dataSemFuncionamentoRepository.findDatasNoPeriodo(
+                dados.dataUtilizacao().minusDays(30), dados.dataUtilizacao());
+        if (datasBloqueadas.contains(dados.dataUtilizacao())) {
+            throw new RegraNegocioException("Não há funcionamento do transporte na data informada.");
+        }
+        if (!regrasTemporais.permiteReservar(dados.dataUtilizacao(), datasBloqueadas)) {
             throw new RegraNegocioException("A data de utilização ou o horário está fora da janela de reservas.");
         }
         if (suspensaoRepository.existsSuspensaoVigenteParaData(alunoId, dados.dataUtilizacao())) {
@@ -180,8 +190,9 @@ public class ReservaService {
             throw new RegraNegocioException("O aluno está inativo.");
         }
         LocalDate hoje = LocalDate.now(clock);
-        LocalDate proximaData = regrasTemporais.proximoDiaTransporte(hoje);
-        var atual = regrasTemporais.ehDiaTransporte(hoje) ? buscarConfirmadaParaPainel(alunoId, hoje) : null;
+        Set<LocalDate> datasBloqueadas = dataSemFuncionamentoRepository.findDatasAPartirDe(hoje);
+        LocalDate proximaData = regrasTemporais.proximoDiaTransporte(hoje, datasBloqueadas);
+        var atual = regrasTemporais.ehDiaTransporte(hoje, datasBloqueadas) ? buscarConfirmadaParaPainel(alunoId, hoje) : null;
         var proxima = buscarConfirmadaParaPainel(alunoId, proximaData);
         ReservaResponse comprovante = atual == null ? null : new ReservaResponse(atual.getId(), atual.getAluno().getId(),
                 atual.getDataUtilizacao(), atual.getDataHoraReserva(), atual.getStatusReserva(),
@@ -223,4 +234,5 @@ public class ReservaService {
             log.error("Reservas confirmadas duplicadas para aluno {} e data {}", alunoId, data, e);
             throw new RegraNegocioException("Inconsistência: mais de uma reserva confirmada para o aluno e a data.");
         }
-    }}
+    }
+}

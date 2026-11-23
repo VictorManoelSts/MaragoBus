@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Objects;
+import java.util.Set;
 
 /** Regras puras de progressão e calendário de suspensão; sem acesso à persistência. */
 @Component
@@ -41,32 +42,50 @@ public class RegrasTemporaisSuspensao {
 
     /**
      * Antes das 11:00 em dia de transporte -> inicia no próprio dia.
-     * A partir das 11:00 ou em fim de semana -> inicia no próximo dia de transporte.
+     * A partir das 11:00 ou em dia sem transporte -> inicia no próximo dia de transporte.
      */
     public LocalDate calcularDataInicio(LocalDateTime dataHoraAplicacao) {
+        return calcularDataInicio(dataHoraAplicacao, Set.of());
+    }
+
+    public LocalDate calcularDataInicio(LocalDateTime dataHoraAplicacao, Set<LocalDate> datasSemFuncionamento) {
         Objects.requireNonNull(dataHoraAplicacao, "A data e hora de aplicação são obrigatórias.");
+        Objects.requireNonNull(datasSemFuncionamento, "As datas sem funcionamento são obrigatórias.");
         LocalDate data = dataHoraAplicacao.toLocalDate();
         LocalTime hora = dataHoraAplicacao.toLocalTime();
 
-        if (regrasTemporaisReserva.ehDiaTransporte(data) && hora.isBefore(LIMITE_INICIO_MESMO_DIA)) {
+        if (regrasTemporaisReserva.ehDiaTransporte(data, datasSemFuncionamento)
+                && hora.isBefore(LIMITE_INICIO_MESMO_DIA)) {
             return data;
         }
-        return regrasTemporaisReserva.proximoDiaTransporte(data);
+        return regrasTemporaisReserva.proximoDiaTransporte(data, datasSemFuncionamento);
     }
 
-    /** Conta somente dias de transporte (segunda a sexta), sendo dataInicio o 1º dia. */
+    /** Conta somente dias com funcionamento do transporte, sendo dataInicio o 1º dia. */
     public LocalDate calcularDataFim(LocalDate dataInicio, DuracaoSuspensao duracao) {
+        return calcularDataFim(dataInicio, duracao, Set.of());
+    }
+
+    public LocalDate calcularDataFim(LocalDate dataInicio, DuracaoSuspensao duracao, Set<LocalDate> datasSemFuncionamento) {
         Objects.requireNonNull(dataInicio, "A data de início é obrigatória.");
         Objects.requireNonNull(duracao, "A duração da suspensão é obrigatória.");
-        if (!regrasTemporaisReserva.ehDiaTransporte(dataInicio)) {
+        Objects.requireNonNull(datasSemFuncionamento, "As datas sem funcionamento são obrigatórias.");
+        if (!regrasTemporaisReserva.ehDiaTransporte(dataInicio, datasSemFuncionamento)) {
             throw new RegraNegocioException("A data de início da suspensão deve ser um dia de transporte.");
         }
 
         LocalDate dataFim = dataInicio;
         for (int i = 1; i < duracao.getDias(); i++) {
-            dataFim = regrasTemporaisReserva.proximoDiaTransporte(dataFim);
+            dataFim = regrasTemporaisReserva.proximoDiaTransporte(dataFim, datasSemFuncionamento);
         }
         return dataFim;
+    }
+
+    /** Avança a data de término em um dia de transporte quando uma data interna à suspensão é bloqueada. */
+    public LocalDate estenderDataFim(LocalDate dataFimAtual, Set<LocalDate> datasSemFuncionamento) {
+        Objects.requireNonNull(dataFimAtual, "A data de término atual é obrigatória.");
+        Objects.requireNonNull(datasSemFuncionamento, "As datas sem funcionamento são obrigatórias.");
+        return regrasTemporaisReserva.proximoDiaTransporte(dataFimAtual, datasSemFuncionamento);
     }
 
     public boolean cobreData(LocalDate dataInicio, LocalDate dataFim, LocalDate dataUtilizacao) {
