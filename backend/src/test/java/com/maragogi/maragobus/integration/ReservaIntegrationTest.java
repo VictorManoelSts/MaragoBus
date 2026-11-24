@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.*;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -256,6 +257,7 @@ class ReservaIntegrationTest {
             }
         }
     }
+
     @Test
     void devePersistirNovoPontoAposCommitPreservandoPerfilEOutraReserva() {
         var original = service.cadastrar(alunoId, new CriacaoReservaRequest(data));
@@ -349,6 +351,7 @@ class ReservaIntegrationTest {
             } finally { liberarCommit.countDown(); }
         }
     }
+
     private UUID persistirReservaParaPainel(LocalDate utilizacao, StatusReserva statusReserva) {
         return transacao.execute(status -> reservas.save(Reserva.builder()
                 .aluno(usuarios.findById(alunoId).orElseThrow()).pontoEmbarque(pontos.findById(pontoId).orElseThrow())
@@ -399,9 +402,9 @@ class ReservaIntegrationTest {
     void deveDetectarDuplicadasConfirmadasPersistidasNoPainel(boolean futura) {
         LocalDate utilizacao = futura ? data : data.minusDays(3);
         persistirReservaParaPainel(utilizacao, StatusReserva.CONFIRMADA);
-        persistirReservaParaPainel(utilizacao, StatusReserva.CONFIRMADA);
-        assertThrows(RegraNegocioException.class, () -> service.consultarPainel(alunoId));
-        transacao.executeWithoutResult(status -> assertEquals(2, reservas.count()));
+        assertThrows(DataIntegrityViolationException.class,
+                () -> persistirReservaParaPainel(utilizacao, StatusReserva.CONFIRMADA));
+        transacao.executeWithoutResult(status -> assertEquals(1, reservas.count()));
     }
 
     @Test void naoDeveBuscarUmaReservaMaisDistanteNemUsarComprovanteNoFimDeSemana() {
@@ -411,6 +414,7 @@ class ReservaIntegrationTest {
         var painel = service.consultarPainel(alunoId);
         assertNull(painel.reservaAtual()); assertNull(painel.proximaReserva());
     }
+
     @ParameterizedTest @ValueSource(ints = {0, 1, 2, 3})
     void devePaginarEOrdenarHistoricoNoPostgresSemModificarRegistros(int pagina) {
         UUID futura = persistirReservaParaPainel(data.plusDays(1), StatusReserva.CONFIRMADA);
@@ -491,6 +495,7 @@ class ReservaIntegrationTest {
         assertTrue(resultado.isEmpty()); assertEquals(0, resultado.getTotalElements());
         assertEquals(0, resultado.getTotalPages()); assertFalse(resultado.hasNext());
     }
+
     private UUID motoristaParaResumo() {
         return transacao.execute(status -> usuarios.save(Usuario.builder().nome("Motorista Teste")
                 .cpf("12345678901").telefone("82977777777").endereco("Rua Motorista")
@@ -612,8 +617,9 @@ class ReservaIntegrationTest {
         assertThrows(RegraNegocioException.class, () -> consultaMotorista.consultarResumo(motorista, data));
         transacao.executeWithoutResult(status -> assertEquals(1, reservas.count()));
     }
+
     private record DadosPassageiros(UUID motorista, UUID faculdadeA, UUID faculdadeB, UUID bairro,
-            java.util.List<com.maragogi.maragobus.dto.reserva.PassageiroConfirmadoResponse> esperados) {}
+                                    java.util.List<com.maragogi.maragobus.dto.reserva.PassageiroConfirmadoResponse> esperados) {}
 
     private DadosPassageiros prepararPassageiros() {
         UUID motorista = motoristaParaResumo();
@@ -634,11 +640,13 @@ class ReservaIntegrationTest {
         var esperados = new java.util.ArrayList<com.maragogi.maragobus.dto.reserva.PassageiroConfirmadoResponse>();
         esperados.add(new com.maragogi.maragobus.dto.reserva.PassageiroConfirmadoResponse(original.id(), alunoId, "Ana", data,
                 faculdadeA, "Alfa", bairro, "Bairro"));
-        // Duplicidade controlada de fixture: ambos os IDs devem continuar identificáveis na listagem.
-        UUID duplicada = transacao.execute(status -> reservas.save(Reserva.builder()
-                .aluno(usuarios.findById(alunoId).orElseThrow()).pontoEmbarque(pontos.findById(pontoId).orElseThrow())
+        // Segunda aluna homônima ("Ana") para validar desempate por ID respeitando a unicidade por aluno/data.
+        UUID outraAnaId = alunoParaResumo(ofertaA, 99);
+        transacao.executeWithoutResult(status -> usuarios.findById(outraAnaId).orElseThrow().setNome("Ana"));
+        UUID segundaAnaReserva = transacao.execute(status -> reservas.save(Reserva.builder()
+                .aluno(usuarios.findById(outraAnaId).orElseThrow()).pontoEmbarque(pontos.findById(pontoId).orElseThrow())
                 .dataUtilizacao(data).dataHoraReserva(original.dataHoraReserva()).build()).getId());
-        esperados.add(new com.maragogi.maragobus.dto.reserva.PassageiroConfirmadoResponse(duplicada, alunoId, "Ana", data,
+        esperados.add(new com.maragogi.maragobus.dto.reserva.PassageiroConfirmadoResponse(segundaAnaReserva, outraAnaId, "Ana", data,
                 faculdadeA, "Alfa", pontoId, "Centro"));
         for (int i = 1; i <= 3; i++) {
             UUID aluno = alunoParaResumo(i == 1 ? ofertaA : ofertaB, i);
@@ -703,7 +711,8 @@ class ReservaIntegrationTest {
         assertEquals(fixture.esperados().subList(inicio, Math.min(inicio + 2, 5)), resultado.getContent());
         var todas = consultaMotorista.consultarPassageirosConfirmados(fixture.motorista(), data, null, null, 0, null);
         assertEquals(10, todas.getSize()); assertEquals(fixture.esperados(), todas.getContent());
-        assertEquals(2, todas.stream().filter(p -> p.alunoId().equals(alunoId)).count());
+        assertEquals(1, todas.stream().filter(p -> p.alunoId().equals(alunoId)).count());
+        assertEquals(3, todas.stream().filter(p -> p.alunoNome().equals("Ana")).count());
         var futuro = consultaMotorista.consultarPassageirosConfirmados(fixture.motorista(), data.plusDays(1), null, null, 0, 50);
         assertEquals(1, futuro.getTotalElements()); assertEquals(pontoId, futuro.getContent().getFirst().pontoEmbarqueId());
     }
