@@ -41,4 +41,16 @@ public class Reserva {
 
     @Column(name = "data_hora_cancelamento")
     private LocalDateTime dataHoraCancelamento;
+
+    @Column(name = "ponto_embarque_nome_snapshot", length = 150)
+    private String pontoEmbarqueNomeSnapshot;
+
+    @Column(name = "faculdade_id_snapshot")
+    private UUID faculdadeIdSnapshot;
+
+    @Column(name = "faculdade_nome_snapshot", length = 150)
+    private String faculdadeNomeSnapshot;
+
+    @Column(name = "curso_nome_snapshot", length = 150)
+    private String cursoNomeSnapshot;
 }

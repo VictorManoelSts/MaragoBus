@@ -6,7 +6,10 @@ import com.maragogi.maragobus.dto.reserva.AtualizacaoPontoEmbarqueReservaRequest
 import com.maragogi.maragobus.dto.reserva.ReservaResponse;
 import com.maragogi.maragobus.dto.reserva.PainelReservasAlunoResponse;
 import com.maragogi.maragobus.dto.reserva.ConfirmacaoProximaReservaResponse;
+import com.maragogi.maragobus.entity.PerfilAluno;
+import com.maragogi.maragobus.entity.PontoEmbarque;
 import com.maragogi.maragobus.entity.Reserva;
+import com.maragogi.maragobus.entity.Usuario;
 import com.maragogi.maragobus.enums.StatusReserva;
 import com.maragogi.maragobus.enums.TipoUsuario;
 import com.maragogi.maragobus.exception.RecursoNaoEncontradoException;
@@ -67,23 +70,11 @@ public class ReservaService {
     // O UUID é um argumento interno, não uma autorização. Autenticação continua pendente.
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ReservaResponse cadastrar(@NotNull UUID alunoId, @Valid @NotNull CriacaoReservaRequest dados) {
-        var aluno = usuarioRepository.findByIdParaCriarReserva(alunoId)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Usuário não encontrado."));
-        if (aluno.getTipoUsuario() != TipoUsuario.ALUNO) {
-            throw new RegraNegocioException("Somente alunos podem criar reservas.");
-        }
-        if (!aluno.isAtivo()) {
-            throw new RegraNegocioException("O aluno está inativo.");
-        }
+        var aluno = validarAlunoComLock(alunoId, "Somente alunos podem criar reservas.");
         var perfil = perfilAlunoRepository.findByUsuarioId(alunoId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Perfil de aluno não encontrado."));
-        var ponto = perfil.getPontoEmbarquePadrao();
-        if (ponto == null) {
-            throw new RegraNegocioException("O aluno não possui ponto de embarque padrão.");
-        }
-        if (!ponto.isAtivo()) {
-            throw new RegraNegocioException("O ponto de embarque está inativo.");
-        }
+        var ponto = validarPontoPadrao(perfil);
+
         Set<LocalDate> datasBloqueadas = dataSemFuncionamentoRepository.findDatasNoPeriodo(
                 dados.dataUtilizacao().minusDays(30), dados.dataUtilizacao());
         if (datasBloqueadas.contains(dados.dataUtilizacao())) {
@@ -99,27 +90,45 @@ public class ReservaService {
                 alunoId, dados.dataUtilizacao(), StatusReserva.CONFIRMADA)) {
             throw new RegraNegocioException("Já existe uma reserva confirmada para este aluno e data.");
         }
-        var reserva = Reserva.builder().aluno(aluno).pontoEmbarque(ponto).dataUtilizacao(dados.dataUtilizacao())
-                .dataHoraReserva(LocalDateTime.now(clock)).statusReserva(StatusReserva.CONFIRMADA)
-                .dataHoraCancelamento(null).build();
-        var salva = reservaRepository.save(reserva);
-        return new ReservaResponse(salva.getId(), salva.getAluno().getId(), salva.getDataUtilizacao(),
-                salva.getDataHoraReserva(), salva.getStatusReserva(),
-                salva.getPontoEmbarque().getId(), salva.getPontoEmbarque().getNome(), salva.getDataHoraCancelamento());
+
+        var salva = reservaRepository.save(construirReservaComSnapshot(aluno, perfil, ponto, dados.dataUtilizacao()));
+        return mapearResposta(salva);
+    }
+
+    /**
+     * Calcula a data de utilização no servidor conforme a janela aberta atual e garante idempotência:
+     * se já existir reserva confirmada para o aluno na data calculada, retorna a reserva existente.
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public ReservaResponse reservarProximaDataDisponivel(@NotNull UUID alunoId) {
+        var aluno = validarAlunoComLock(alunoId, "Somente alunos podem criar reservas.");
+        var perfil = perfilAlunoRepository.findByUsuarioId(alunoId)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Perfil de aluno não encontrado."));
+        var ponto = validarPontoPadrao(perfil);
+
+        LocalDate hoje = LocalDate.now(clock);
+        Set<LocalDate> datasBloqueadas = dataSemFuncionamentoRepository.findDatasAPartirDe(hoje);
+        LocalDate dataAlvo = calcularDataAbertaNoServidor(hoje, datasBloqueadas);
+
+        if (suspensaoRepository.existsSuspensaoVigenteParaData(alunoId, dataAlvo)) {
+            throw new RegraNegocioException("O aluno está suspenso para a data de utilização informada.");
+        }
+
+        var existente = reservaRepository.findByAlunoIdAndDataUtilizacaoAndStatusReserva(
+                alunoId, dataAlvo, StatusReserva.CONFIRMADA);
+        if (existente.isPresent()) {
+            return mapearResposta(existente.get());
+        }
+
+        var salva = reservaRepository.saveAndFlush(construirReservaComSnapshot(aluno, perfil, ponto, dataAlvo));
+        return mapearResposta(salva);
     }
 
     // A identidade autenticada deverá fornecer alunoId futuramente.
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ReservaResponse cancelar(@NotNull UUID alunoId, @NotNull UUID reservaId) {
         // Mesma ordem da criação: lock do aluno antes de consultar ou alterar reservas.
-        var aluno = usuarioRepository.findByIdParaCriarReserva(alunoId)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Usuário não encontrado."));
-        if (aluno.getTipoUsuario() != TipoUsuario.ALUNO) {
-            throw new RegraNegocioException("Somente alunos podem cancelar reservas.");
-        }
-        if (!aluno.isAtivo()) {
-            throw new RegraNegocioException("O aluno está inativo.");
-        }
+        validarAlunoComLock(alunoId, "Somente alunos podem cancelar reservas.");
         var reserva = reservaRepository.findById(reservaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Reserva não encontrada."));
         if (!reserva.getAluno().getId().equals(alunoId)) {
@@ -137,23 +146,14 @@ public class ReservaService {
         }
         reserva.setStatusReserva(StatusReserva.CANCELADA_PELO_ALUNO);
         reserva.setDataHoraCancelamento(agora);
-        return new ReservaResponse(reserva.getId(), reserva.getAluno().getId(), reserva.getDataUtilizacao(),
-                reserva.getDataHoraReserva(), reserva.getStatusReserva(),
-                reserva.getPontoEmbarque().getId(), reserva.getPontoEmbarque().getNome(), reserva.getDataHoraCancelamento());
+        return mapearResposta(reserva);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ReservaResponse alterarPontoEmbarque(@NotNull UUID alunoId, @NotNull UUID reservaId,
                                                 @Valid @NotNull AtualizacaoPontoEmbarqueReservaRequest dados) {
         // Consultar a reserva somente depois de adquirir o mesmo lock da criação e do cancelamento.
-        var aluno = usuarioRepository.findByIdParaCriarReserva(alunoId)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Usuário não encontrado."));
-        if (aluno.getTipoUsuario() != TipoUsuario.ALUNO) {
-            throw new RegraNegocioException("Somente alunos podem alterar o ponto de embarque de reservas.");
-        }
-        if (!aluno.isAtivo()) {
-            throw new RegraNegocioException("O aluno está inativo.");
-        }
+        validarAlunoComLock(alunoId, "Somente alunos podem alterar o ponto de embarque de reservas.");
         var reserva = reservaRepository.findById(reservaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Reserva não encontrada."));
         if (!reserva.getAluno().getId().equals(alunoId)) {
@@ -174,9 +174,8 @@ public class ReservaService {
             throw new RegraNegocioException("O ponto de embarque está inativo.");
         }
         reserva.setPontoEmbarque(ponto);
-        return new ReservaResponse(reserva.getId(), reserva.getAluno().getId(), reserva.getDataUtilizacao(),
-                reserva.getDataHoraReserva(), reserva.getStatusReserva(),
-                ponto.getId(), ponto.getNome(), reserva.getDataHoraCancelamento());
+        reserva.setPontoEmbarqueNomeSnapshot(ponto.getNome());
+        return mapearResposta(reserva);
     }
 
     @Transactional(readOnly = true)
@@ -194,9 +193,7 @@ public class ReservaService {
         LocalDate proximaData = regrasTemporais.proximoDiaTransporte(hoje, datasBloqueadas);
         var atual = regrasTemporais.ehDiaTransporte(hoje, datasBloqueadas) ? buscarConfirmadaParaPainel(alunoId, hoje) : null;
         var proxima = buscarConfirmadaParaPainel(alunoId, proximaData);
-        ReservaResponse comprovante = atual == null ? null : new ReservaResponse(atual.getId(), atual.getAluno().getId(),
-                atual.getDataUtilizacao(), atual.getDataHoraReserva(), atual.getStatusReserva(),
-                atual.getPontoEmbarque().getId(), atual.getPontoEmbarque().getNome(), atual.getDataHoraCancelamento());
+        ReservaResponse comprovante = atual == null ? null : mapearResposta(atual);
         return new PainelReservasAlunoResponse(comprovante, proxima == null ? null
                 : new ConfirmacaoProximaReservaResponse(proxima.getDataUtilizacao(), proxima.getStatusReserva()));
     }
@@ -221,9 +218,75 @@ public class ReservaService {
         }
         var ordenacao = Sort.by(Sort.Order.desc("dataUtilizacao"), Sort.Order.desc("dataHoraReserva"), Sort.Order.asc("id"));
         return reservaRepository.findByAlunoId(alunoId, PageRequest.of(pagina, tamanhoEfetivo, ordenacao))
-                .map(reserva -> new ReservaResponse(reserva.getId(), reserva.getAluno().getId(), reserva.getDataUtilizacao(),
-                        reserva.getDataHoraReserva(), reserva.getStatusReserva(), reserva.getPontoEmbarque().getId(),
-                        reserva.getPontoEmbarque().getNome(), reserva.getDataHoraCancelamento()));
+                .map(this::mapearResposta);
+    }
+
+    private Usuario validarAlunoComLock(UUID alunoId, String mensagemTipo) {
+        var aluno = usuarioRepository.findByIdParaCriarReserva(alunoId)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Usuário não encontrado."));
+        if (aluno.getTipoUsuario() != TipoUsuario.ALUNO) {
+            throw new RegraNegocioException(mensagemTipo);
+        }
+        if (!aluno.isAtivo()) {
+            throw new RegraNegocioException("O aluno está inativo.");
+        }
+        return aluno;
+    }
+
+    private PontoEmbarque validarPontoPadrao(PerfilAluno perfil) {
+        var ponto = perfil.getPontoEmbarquePadrao();
+        if (ponto == null) {
+            throw new RegraNegocioException("O aluno não possui ponto de embarque padrão.");
+        }
+        if (!ponto.isAtivo()) {
+            throw new RegraNegocioException("O ponto de embarque está inativo.");
+        }
+        return ponto;
+    }
+
+    private LocalDate calcularDataAbertaNoServidor(LocalDate hoje, Set<LocalDate> datasBloqueadas) {
+        if (!datasBloqueadas.contains(hoje) && regrasTemporais.permiteReservar(hoje, datasBloqueadas)) {
+            return hoje;
+        }
+        LocalDate proximaData = regrasTemporais.proximoDiaTransporte(hoje, datasBloqueadas);
+        if (!datasBloqueadas.contains(proximaData) && regrasTemporais.permiteReservar(proximaData, datasBloqueadas)) {
+            return proximaData;
+        }
+        throw new RegraNegocioException("Nenhuma janela de reservas está aberta no momento.");
+    }
+
+    private Reserva construirReservaComSnapshot(Usuario aluno, PerfilAluno perfil, PontoEmbarque ponto, LocalDate data) {
+        var oferta = perfil.getCursoOfertado();
+        var faculdade = oferta == null ? null : oferta.getFaculdade();
+        var curso = oferta == null ? null : oferta.getCurso();
+        return Reserva.builder()
+                .aluno(aluno)
+                .pontoEmbarque(ponto)
+                .pontoEmbarqueNomeSnapshot(ponto.getNome())
+                .faculdadeIdSnapshot(faculdade == null ? null : faculdade.getId())
+                .faculdadeNomeSnapshot(faculdade == null ? null : faculdade.getNome())
+                .cursoNomeSnapshot(curso == null ? null : curso.getNome())
+                .dataUtilizacao(data)
+                .dataHoraReserva(LocalDateTime.now(clock))
+                .statusReserva(StatusReserva.CONFIRMADA)
+                .dataHoraCancelamento(null)
+                .build();
+    }
+
+    private ReservaResponse mapearResposta(Reserva reserva) {
+        String nomePonto = reserva.getPontoEmbarqueNomeSnapshot() != null
+                ? reserva.getPontoEmbarqueNomeSnapshot()
+                : reserva.getPontoEmbarque().getNome();
+        return new ReservaResponse(
+                reserva.getId(),
+                reserva.getAluno().getId(),
+                reserva.getDataUtilizacao(),
+                reserva.getDataHoraReserva(),
+                reserva.getStatusReserva(),
+                reserva.getPontoEmbarque().getId(),
+                nomePonto,
+                reserva.getDataHoraCancelamento()
+        );
     }
 
     private Reserva buscarConfirmadaParaPainel(UUID alunoId, LocalDate data) {
