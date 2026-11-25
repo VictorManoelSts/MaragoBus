@@ -2,11 +2,14 @@ package com.maragogi.maragobus.integration;
 
 import com.maragogi.maragobus.dto.reserva.CriacaoReservaRequest;
 import com.maragogi.maragobus.dto.reserva.AtualizacaoPontoEmbarqueReservaRequest;
+import com.maragogi.maragobus.dto.faculdade.AtualizacaoFaculdadeRequest;
+import com.maragogi.maragobus.dto.faculdade.CadastroFaculdadeRequest;
 import com.maragogi.maragobus.entity.*;
 import com.maragogi.maragobus.enums.*;
 import com.maragogi.maragobus.exception.RegraNegocioException;
 import com.maragogi.maragobus.repository.*;
 import com.maragogi.maragobus.service.ReservaService;
+import com.maragogi.maragobus.service.FaculdadeService;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -16,6 +19,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.*;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -23,6 +28,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import javax.sql.DataSource;
+import java.sql.SQLException;
 import java.time.*;
 import java.util.UUID;
 import java.util.concurrent.*;
@@ -52,6 +58,7 @@ class ReservaIntegrationTest {
     }
     @Autowired RelogioControlado relogio;
     @Autowired ReservaService service;
+    @Autowired FaculdadeService faculdadeService;
     @Autowired com.maragogi.maragobus.service.ConsultaReservasMotoristaService consultaMotorista;
     @Autowired UsuarioRepository usuarios;
     @Autowired PerfilAlunoRepository perfis;
@@ -94,6 +101,53 @@ class ReservaIntegrationTest {
                     .pontoEmbarquePadrao(ponto).build());
             alunoId = aluno.getId(); pontoId = ponto.getId();
         });
+    }
+
+    @Test
+    void preservaReservaConfirmadaESeusSnapshotsAoRenomearEDesativarFaculdade() {
+        var confirmada = service.cadastrar(alunoId, new CriacaoReservaRequest(data));
+        UUID faculdadeId = faculdades.findByNome("Faculdade").orElseThrow().getId();
+        var ativa = faculdadeService.cadastrar(new CadastroFaculdadeRequest("Faculdade Z"));
+
+        faculdadeService.atualizarDados(faculdadeId, new AtualizacaoFaculdadeRequest("Faculdade A"));
+        faculdadeService.desativar(faculdadeId);
+
+        var pagina = PageRequest.of(0, 1, Sort.by("nome", "id"));
+        var todas = faculdadeService.listar(pagina, false);
+        assertEquals(2, todas.getTotalElements());
+        assertEquals(faculdadeId, todas.getContent().getFirst().id());
+        assertFalse(todas.getContent().getFirst().ativo());
+        assertEquals(ativa, faculdadeService.listar(pagina.next(), false).getContent().getFirst());
+        var ativas = faculdadeService.listar(pagina, true);
+        assertEquals(1, ativas.getTotalElements());
+        assertEquals(ativa, ativas.getContent().getFirst());
+
+        transacao.executeWithoutResult(status -> {
+            var reserva = reservas.findById(confirmada.id()).orElseThrow();
+            var oferta = perfis.findAll().getFirst().getCursoOfertado();
+            assertAll(() -> assertEquals(StatusReserva.CONFIRMADA, reserva.getStatusReserva()),
+                    () -> assertNull(reserva.getDataHoraCancelamento()),
+                    () -> assertEquals(faculdadeId, reserva.getFaculdadeIdSnapshot()),
+                    () -> assertEquals("Faculdade", reserva.getFaculdadeNomeSnapshot()),
+                    () -> assertEquals("Direito", reserva.getCursoNomeSnapshot()),
+                    () -> assertEquals("Centro", reserva.getPontoEmbarqueNomeSnapshot()),
+                    () -> assertEquals(faculdadeId, oferta.getFaculdade().getId()),
+                    () -> assertTrue(oferta.isAtivo()));
+        });
+
+        faculdadeService.reativar(faculdadeId);
+        assertTrue(faculdadeService.buscarPorId(faculdadeId).ativo());
+    }
+
+    @Test
+    void postgresMantemNomeDaFaculdadeUnicoMesmoQuandoInativa() {
+        UUID faculdadeId = faculdades.findByNome("Faculdade").orElseThrow().getId();
+        faculdadeService.desativar(faculdadeId);
+
+        var erro = assertThrows(DataIntegrityViolationException.class,
+                () -> faculdades.saveAndFlush(Faculdade.builder().nome("Faculdade").build()));
+        var causa = assertInstanceOf(SQLException.class, erro.getMostSpecificCause());
+        assertEquals("23505", causa.getSQLState());
     }
 
     @Test

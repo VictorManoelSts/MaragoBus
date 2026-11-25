@@ -1,0 +1,561 @@
+{
+  "info": {
+    "name": "MaragoBus | Faculdade local",
+    "description": "Execute com o perfil curso-local e um PostgreSQL isolado com a tabela faculdades vazia. Configure a conta fictícia em spring.security.user.name e o hash BCrypt da senha em spring.security.user.password. Passe baseUrl, usuario e a senha em texto simples via variáveis do Newman ou ambiente do Postman.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "basic",
+    "basic": [
+      {
+        "key": "username",
+        "value": "{{usuario}}",
+        "type": "string"
+      },
+      {
+        "key": "password",
+        "value": "{{senha}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:18081"
+    }
+  ],
+  "item": [
+    {
+      "name": "Acesso anônimo",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/faculdades",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sessão e token CSRF",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "text/html"
+          }
+        ],
+        "url": "{{baseUrl}}/login",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "const token = pm.response.text().match(/<input\\b(?=[^>]*\\bname=\"_csrf\")[^>]*\\bvalue=\"([^\"]+)\"/);",
+              "pm.test(\"Token CSRF disponível\", () => pm.expect(token).to.be.an('array'));",
+              "if (token) pm.collectionVariables.set(\"csrfToken\", token[1]);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Escrita sem CSRF",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/faculdades",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"nome\":\" Faculdade fictícia Alfa \"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cadastro inválido",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/faculdades",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"nome\":\" \"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cadastrar faculdade",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/faculdades",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"nome\":\" Faculdade fictícia Alfa \"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "const id = pm.response.json().id;",
+              "pm.test(\"UUID válido\", () => pm.expect(id).to.match(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i));",
+              "pm.collectionVariables.set(\"faculdadeId\", id);",
+              "pm.test(\"DTO da faculdade\", () => pm.expect(pm.response.json()).to.eql({ id: pm.collectionVariables.get(\"faculdadeId\"), nome: \"Faculdade fictícia Alfa\", ativo: true }));",
+              "pm.test(\"Location do recurso\", () => pm.expect(pm.response.headers.get(\"Location\")).to.eql(pm.variables.get(\"baseUrl\") + \"/api/faculdades/\" + id));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Nome duplicado",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/faculdades",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"nome\":\" Faculdade fictícia Alfa \"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+              "pm.test(\"ProblemDetail de conflito\", () => pm.expect(pm.response.json().status).to.eql(409));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Consultar por UUID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/faculdades/{{faculdadeId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"DTO da faculdade\", () => pm.expect(pm.response.json()).to.eql({ id: pm.collectionVariables.get(\"faculdadeId\"), nome: \"Faculdade fictícia Alfa\", ativo: true }));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Consultar UUID inexistente",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/faculdades/00000000-0000-0000-0000-000000000000"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Consultar UUID malformado",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/faculdades/invalido"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Paginação inválida",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/faculdades?page=-1&size=101"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Atualizar nome",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/faculdades/{{faculdadeId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"nome\":\" Faculdade fictícia Beta \"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"DTO da faculdade\", () => pm.expect(pm.response.json()).to.eql({ id: pm.collectionVariables.get(\"faculdadeId\"), nome: \"Faculdade fictícia Beta\", ativo: true }));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Desativar faculdade",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/faculdades/{{faculdadeId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 204\", () => pm.response.to.have.status(204));",
+              "pm.test(\"Sem corpo\", () => pm.expect(pm.response.text()).to.eql(\"\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Consultar faculdade inativa",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/faculdades/{{faculdadeId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"DTO da faculdade\", () => pm.expect(pm.response.json()).to.eql({ id: pm.collectionVariables.get(\"faculdadeId\"), nome: \"Faculdade fictícia Beta\", ativo: false }));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Listar incluindo inativas",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/faculdades?page=0&size=1"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Dados paginados\", () => pm.expect(pm.response.json()).to.eql({ content: [{ id: pm.collectionVariables.get(\"faculdadeId\"), nome: \"Faculdade fictícia Beta\", ativo: false }], page: { number: 0, size: 1, totalElements: 1, totalPages: 1 } }));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Listar somente ativas",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/faculdades?somenteAtivos=true"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Inativas excluídas do resultado\", () => pm.expect(pm.response.json().content).to.eql([]));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Nome duplicado de faculdade inativa",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/faculdades",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"nome\":\"Faculdade fictícia Beta\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reativar faculdade",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/faculdades/{{faculdadeId}}/reativacao"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 204\", () => pm.response.to.have.status(204));",
+              "pm.test(\"Sem corpo\", () => pm.expect(pm.response.text()).to.eql(\"\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Consultar faculdade reativada",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/faculdades/{{faculdadeId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"DTO da faculdade\", () => pm.expect(pm.response.json()).to.eql({ id: pm.collectionVariables.get(\"faculdadeId\"), nome: \"Faculdade fictícia Beta\", ativo: true }));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

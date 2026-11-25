@@ -9,6 +9,8 @@ import com.maragogi.maragobus.exception.RegraNegocioException;
 import com.maragogi.maragobus.repository.FaculdadeRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -46,6 +48,14 @@ public class FaculdadeService {
     @Transactional(readOnly = true)
     public List<FaculdadeResponse> listarAtivos() {
         return faculdadeRepository.findByAtivoTrue().stream().map(this::converterParaResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<FaculdadeResponse> listar(@NotNull Pageable pagina, boolean somenteAtivos) {
+        var faculdades = somenteAtivos
+                ? faculdadeRepository.findByAtivoTrue(pagina)
+                : faculdadeRepository.findAll(pagina);
+        return faculdades.map(this::converterParaResponse);
     }
 
     @Transactional
