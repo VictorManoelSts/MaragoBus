@@ -7,6 +7,9 @@ import com.maragogi.maragobus.entity.SolicitacaoAdvertencia;
 import com.maragogi.maragobus.entity.Suspensao;
 import com.maragogi.maragobus.entity.Usuario;
 import com.maragogi.maragobus.enums.DuracaoSuspensao;
+import com.maragogi.maragobus.enums.StatusSuspensao;
+import com.maragogi.maragobus.enums.StatusSolicitacaoAdvertencia;
+import com.maragogi.maragobus.dto.suspensao.DefinicaoDuracaoSuspensaoRequest;
 import com.maragogi.maragobus.enums.StatusReserva;
 import com.maragogi.maragobus.enums.TipoUsuario;
 import com.maragogi.maragobus.exception.RegraNegocioException;
@@ -81,122 +84,76 @@ class SuspensaoServiceTest {
     }
 
     @Test
-    void naoDeveGerarSuspensaoQuandoTotalDeAdvertenciasNaoForMultiploDeTres() {
-        Usuario aluno = criarUsuario(TipoUsuario.ALUNO, true);
-        Usuario admin = criarUsuario(TipoUsuario.ADMIN, true);
-        Advertencia advertencia = criarAdvertencia(aluno);
+    void deveReservarTresAdvertenciasSemConsultarReservas() {
+        var aluno = criarUsuario(TipoUsuario.ALUNO, true);
+        var primeira = criarAdvertencia(aluno);
+        var segunda = criarAdvertencia(aluno);
+        var terceira = criarAdvertencia(aluno);
+        when(advertenciaRepository
+                .findBySolicitacaoAdvertenciaAlunoIdAndSolicitacaoAdvertenciaStatusAndSuspensaoIsNullOrderBySolicitacaoAdvertenciaDataHoraAnaliseAscIdAsc(
+                        eq(aluno.getId()), eq(StatusSolicitacaoAdvertencia.APROVADA), any(Pageable.class)))
+                .thenReturn(List.of(primeira, segunda))
+                .thenReturn(List.of(primeira, segunda, terceira));
+        when(suspensaoRepository.save(any(Suspensao.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        when(advertenciaRepository.countBySolicitacaoAdvertenciaAlunoId(aluno.getId())).thenReturn(2L);
+        assertTrue(suspensaoService.avaliarSuspensaoPendente(segunda).isEmpty());
+        var resultado = suspensaoService.avaliarSuspensaoPendente(terceira).orElseThrow();
 
-        Optional<Suspensao> resultado = suspensaoService.avaliarEAplicarPorAdvertencia(
-                advertencia, admin, LocalDateTime.of(2026, 10, 7, 10, 0), null);
-
-        assertTrue(resultado.isEmpty());
-        verify(suspensaoRepository, never()).save(any());
-        verify(reservaRepository, never()).findByAlunoIdAndStatusReservaAndDataUtilizacaoBetweenOrderById(any(), any(), any(), any());
+        assertEquals(StatusSuspensao.PENDENTE_DURACAO, resultado.getStatus());
+        assertSame(terceira, resultado.getAdvertenciaOrigem());
+        assertSame(resultado, primeira.getSuspensao());
+        assertSame(resultado, segunda.getSuspensao());
+        assertSame(resultado, terceira.getSuspensao());
+        assertNull(resultado.getDataInicio());
+        verifyNoInteractions(reservaRepository, eventos);
     }
 
     @Test
-    void deveGerarSuspensaoDeUmDiaAntesDas11ECancelarReservaDoProprioDia() {
-        Usuario aluno = criarUsuario(TipoUsuario.ALUNO, true);
-        Usuario admin = criarUsuario(TipoUsuario.ADMIN, true);
-        Advertencia advertencia = criarAdvertencia(aluno);
-        LocalDateTime agora = LocalDateTime.of(2026, 10, 7, 9, 30);
+    void deveAplicarDecisaoPulandoDatasSemFuncionamentoEReservandoODiaAtual() {
+        var aluno = criarUsuario(TipoUsuario.ALUNO, true);
+        var admin = criarUsuario(TipoUsuario.ADMIN, true);
+        var suspensao = pendencia(aluno);
+        var hoje = LocalDate.of(2026, 10, 7);
+        var inicio = LocalDate.of(2026, 10, 9);
+        var fim = LocalDate.of(2026, 10, 13);
+        var reserva = Reserva.builder().statusReserva(StatusReserva.CONFIRMADA).build();
 
-        Reserva reservaHoje = Reserva.builder()
-                .id(UUID.randomUUID())
-                .aluno(aluno)
-                .dataUtilizacao(LocalDate.of(2026, 10, 7))
-                .statusReserva(StatusReserva.CONFIRMADA)
-                .build();
-
-        when(advertenciaRepository.countBySolicitacaoAdvertenciaAlunoId(aluno.getId())).thenReturn(3L);
-        when(suspensaoRepository.save(any(Suspensao.class))).thenAnswer(inv -> {
-            Suspensao s = inv.getArgument(0);
-            s.setId(UUID.randomUUID());
-            return s;
-        });
+        when(usuarioRepository.findById(admin.getId())).thenReturn(Optional.of(admin));
+        when(usuarioRepository.findByIdParaCriarReserva(aluno.getId())).thenReturn(Optional.of(aluno));
+        when(suspensaoRepository.findAlunoId(suspensao.getId())).thenReturn(Optional.of(aluno.getId()));
+        when(suspensaoRepository.findById(suspensao.getId())).thenReturn(Optional.of(suspensao));
+        when(dataSemFuncionamentoRepository.findDatasAPartirDe(hoje)).thenReturn(Set.of(hoje.plusDays(1)));
         when(reservaRepository.findByAlunoIdAndStatusReservaAndDataUtilizacaoBetweenOrderById(
-                aluno.getId(), StatusReserva.CONFIRMADA, LocalDate.of(2026, 10, 7), LocalDate.of(2026, 10, 7)))
-                .thenReturn(List.of(reservaHoje));
+                aluno.getId(), StatusReserva.CONFIRMADA, inicio, fim)).thenReturn(List.of(reserva));
 
-        Optional<Suspensao> resultado = suspensaoService.avaliarEAplicarPorAdvertencia(advertencia, admin, agora, 1);
+        var resultado = suspensaoService.definirDuracao(admin.getId(), suspensao.getId(),
+                new DefinicaoDuracaoSuspensaoRequest(3, "  Reincidência  "));
 
-        assertTrue(resultado.isPresent());
-        Suspensao suspensao = resultado.get();
-        assertEquals(DuracaoSuspensao.UM_DIA, suspensao.getDuracao());
-        assertEquals(LocalDate.of(2026, 10, 7), suspensao.getDataInicio());
-        assertEquals(LocalDate.of(2026, 10, 7), suspensao.getDataFim());
-        assertEquals(admin, suspensao.getAdministradorResponsavel());
-        assertEquals(agora, suspensao.getDataHoraAplicacao());
-
-        assertEquals(StatusReserva.CANCELADA_POR_SUSPENSAO, reservaHoje.getStatusReserva());
-        assertEquals(agora, reservaHoje.getDataHoraCancelamento());
-        verify(eventos).registrarCancelamentoPorSuspensao(reservaHoje, admin, null, agora);
+        assertEquals(StatusSuspensao.APLICADA, resultado.status());
+        assertEquals(DuracaoSuspensao.TRES_DIAS, resultado.duracao());
+        assertEquals(inicio, resultado.dataInicio());
+        assertEquals(fim, resultado.dataFim());
+        assertEquals(admin.getId(), resultado.administradorResponsavelId());
+        assertEquals("Reincidência", resultado.justificativa());
+        assertFalse(resultado.vigente());
+        assertEquals(StatusReserva.CANCELADA_POR_SUSPENSAO, reserva.getStatusReserva());
+        verify(eventos).registrarCancelamentoPorSuspensao(reserva, admin, "Reincidência",
+                hoje.atTime(10, 0));
     }
 
     @Test
-    void deveGerarSuspensaoDeTresDiasAposAs11PreservandoODiaAtualECancelandoFuturas() {
-        Usuario aluno = criarUsuario(TipoUsuario.ALUNO, true);
-        Usuario admin = criarUsuario(TipoUsuario.ADMIN, true);
-        Advertencia advertencia = criarAdvertencia(aluno);
-        // Quarta 07/10 às 18:00 -> período: Qui 08/10 a Seg 12/10
-        LocalDateTime agora = LocalDateTime.of(2026, 10, 7, 18, 0);
+    void deveRejeitarDuracaoInvalidaAntesDeModificarPendencia() {
+        var admin = criarUsuario(TipoUsuario.ADMIN, true);
+        when(usuarioRepository.findById(admin.getId())).thenReturn(Optional.of(admin));
 
-        Reserva reservaQuinta = Reserva.builder()
-                .id(UUID.randomUUID())
-                .aluno(aluno)
-                .dataUtilizacao(LocalDate.of(2026, 10, 8))
-                .statusReserva(StatusReserva.CONFIRMADA)
-                .build();
-
-        when(advertenciaRepository.countBySolicitacaoAdvertenciaAlunoId(aluno.getId())).thenReturn(3L);
-        when(suspensaoRepository.save(any(Suspensao.class))).thenAnswer(inv -> {
-            Suspensao s = inv.getArgument(0);
-            s.setId(UUID.randomUUID());
-            return s;
-        });
-        when(reservaRepository.findByAlunoIdAndStatusReservaAndDataUtilizacaoBetweenOrderById(
-                aluno.getId(), StatusReserva.CONFIRMADA, LocalDate.of(2026, 10, 8), LocalDate.of(2026, 10, 12)))
-                .thenReturn(List.of(reservaQuinta));
-
-        Optional<Suspensao> resultado = suspensaoService.avaliarEAplicarPorAdvertencia(advertencia, admin, agora, 3);
-
-        assertTrue(resultado.isPresent());
-        assertEquals(DuracaoSuspensao.TRES_DIAS, resultado.get().getDuracao());
-        assertEquals(LocalDate.of(2026, 10, 8), resultado.get().getDataInicio());
-        assertEquals(LocalDate.of(2026, 10, 12), resultado.get().getDataFim());
-
-        assertEquals(StatusReserva.CANCELADA_POR_SUSPENSAO, reservaQuinta.getStatusReserva());
-        assertEquals(agora, reservaQuinta.getDataHoraCancelamento());
+        assertThrows(RegraNegocioException.class, () -> suspensaoService.definirDuracao(
+                admin.getId(), UUID.randomUUID(), new DefinicaoDuracaoSuspensaoRequest(2, "Reincidência")));
+        verifyNoInteractions(suspensaoRepository, reservaRepository, eventos);
     }
 
-    @Test
-    void devePularDatasSemFuncionamentoAoAplicarNovaSuspensao() {
-        Usuario aluno = criarUsuario(TipoUsuario.ALUNO, true);
-        Usuario admin = criarUsuario(TipoUsuario.ADMIN, true);
-        Advertencia advertencia = criarAdvertencia(aluno);
-        // Quarta 07/10 às 09:30, mas Qua 07/10 e Sex 09/10 estão bloqueadas -> 3 dias úteis: Qui 08/10, Seg 12/10, Ter 13/10
-        LocalDateTime agora = LocalDateTime.of(2026, 10, 7, 9, 30);
-
-        when(advertenciaRepository.countBySolicitacaoAdvertenciaAlunoId(aluno.getId())).thenReturn(6L);
-        when(dataSemFuncionamentoRepository.findDatasAPartirDe(LocalDate.of(2026, 10, 7)))
-                .thenReturn(Set.of(LocalDate.of(2026, 10, 7), LocalDate.of(2026, 10, 9)));
-        when(suspensaoRepository.save(any(Suspensao.class))).thenAnswer(inv -> {
-            Suspensao s = inv.getArgument(0);
-            s.setId(UUID.randomUUID());
-            return s;
-        });
-        when(reservaRepository.findByAlunoIdAndStatusReservaAndDataUtilizacaoBetweenOrderById(
-                aluno.getId(), StatusReserva.CONFIRMADA, LocalDate.of(2026, 10, 8), LocalDate.of(2026, 10, 13)))
-                .thenReturn(List.of());
-
-        Optional<Suspensao> resultado = suspensaoService.avaliarEAplicarPorAdvertencia(advertencia, admin, agora, 3);
-
-        assertTrue(resultado.isPresent());
-        assertEquals(DuracaoSuspensao.TRES_DIAS, resultado.get().getDuracao());
-        assertEquals(LocalDate.of(2026, 10, 8), resultado.get().getDataInicio());
-        assertEquals(LocalDate.of(2026, 10, 13), resultado.get().getDataFim());
+    private Suspensao pendencia(Usuario aluno) {
+        return Suspensao.builder().id(UUID.randomUUID()).advertenciaOrigem(criarAdvertencia(aluno))
+                .status(StatusSuspensao.PENDENTE_DURACAO).build();
     }
 
     @Test

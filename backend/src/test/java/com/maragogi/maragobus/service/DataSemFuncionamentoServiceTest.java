@@ -3,6 +3,7 @@ package com.maragogi.maragobus.integration;
 import com.maragogi.maragobus.dto.datasemfuncionamento.CadastroDataSemFuncionamentoRequest;
 import com.maragogi.maragobus.dto.reserva.CriacaoReservaRequest;
 import com.maragogi.maragobus.dto.solicitacaoadvertencia.AprovacaoSolicitacaoAdvertenciaRequest;
+import com.maragogi.maragobus.dto.suspensao.DefinicaoDuracaoSuspensaoRequest;
 import com.maragogi.maragobus.entity.*;
 import com.maragogi.maragobus.enums.*;
 import com.maragogi.maragobus.exception.RegraNegocioException;
@@ -10,6 +11,7 @@ import com.maragogi.maragobus.repository.*;
 import com.maragogi.maragobus.service.AnaliseSolicitacaoAdvertenciaService;
 import com.maragogi.maragobus.service.DataSemFuncionamentoService;
 import com.maragogi.maragobus.service.ReservaService;
+import com.maragogi.maragobus.service.SuspensaoService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -76,6 +78,7 @@ class DataSemFuncionamentoIntegrationTest {
     @Autowired RelogioControlado relogio;
     @Autowired DataSemFuncionamentoService dataSemFuncionamentoService;
     @Autowired AnaliseSolicitacaoAdvertenciaService analiseService;
+    @Autowired SuspensaoService suspensaoService;
     @Autowired ReservaService reservaService;
     @Autowired DataSemFuncionamentoRepository datasSemFuncionamento;
     @Autowired SuspensaoRepository suspensoes;
@@ -146,6 +149,7 @@ class DataSemFuncionamentoIntegrationTest {
     private void limparBanco() {
         jdbc.execute("truncate table eventos_reserva");
         datasSemFuncionamento.deleteAllInBatch();
+        jdbc.update("update advertencias set suspensao_id = null where suspensao_id is not null");
         suspensoes.deleteAllInBatch();
         advertencias.deleteAllInBatch();
         solicitacoes.deleteAllInBatch();
@@ -300,25 +304,22 @@ class DataSemFuncionamentoIntegrationTest {
 
     @Test
     void deveEstenderSuspensaoVigentePulandoFimDeSemanaECancelarReservaNaNovaDataFim() {
-        // Ciclo 1: 3 advertências na segunda 12/10 às 09:00 -> suspensão de 1 dia (12/10)
-        relogio.definir("2026-10-12T09:00:00");
-        for (int i = 1; i <= 3; i++) {
+        relogio.definir("2026-10-13T09:30:00");
+        for (int i = 1; i <= 5; i++) {
             analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv " + i),
-                    new AprovacaoSolicitacaoAdvertenciaRequest(null, i == 3 ? 1 : null));
+                    new AprovacaoSolicitacaoAdvertenciaRequest(null));
         }
-
-        // Ciclo 2: 6ª advertência na quarta 14/10 às 09:30 -> 3 dias úteis: Qua(14), Qui(15), Sex(16)
-        relogio.definir("2026-10-14T09:30:00");
-        analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 4"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
-        analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 5"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
         var aprovacao6 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 6"),
-                new AprovacaoSolicitacaoAdvertenciaRequest("Gatilho 3 dias", 3));
+                new AprovacaoSolicitacaoAdvertenciaRequest("Gatilho 3 dias"));
+        suspensaoService.definirDuracao(adminId, aprovacao6.suspensaoId(),
+                new DefinicaoDuracaoSuspensaoRequest(3, "Reincidência"));
         assertNotNull(aprovacao6.suspensaoId());
 
         LocalDate quintaBloqueada = LocalDate.of(2026, 10, 15);
         LocalDate segundaNovaDataFim = LocalDate.of(2026, 10, 19);
         UUID reservaSegundaId = criarReservaConfirmada(segundaNovaDataFim);
 
+        relogio.definir("2026-10-14T09:30:00");
         // Bloqueio da quinta-feira interna à suspensão -> dataFim estendida de Sex(16) para Seg(19)
         var resposta = dataSemFuncionamentoService.cadastrar(
                 adminId, new CadastroDataSemFuncionamentoRequest(quintaBloqueada, "Manutenção preventiva"));
@@ -365,7 +366,9 @@ class DataSemFuncionamentoIntegrationTest {
         analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 1"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
         analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 2"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
         var aprovacao3 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 3"),
-                new AprovacaoSolicitacaoAdvertenciaRequest(null, 1));
+                new AprovacaoSolicitacaoAdvertenciaRequest(null));
+        suspensaoService.definirDuracao(adminId, aprovacao3.suspensaoId(),
+                new DefinicaoDuracaoSuspensaoRequest(1, "Reincidência"));
 
         assertNotNull(aprovacao3.suspensaoId());
         transacao.executeWithoutResult(status -> {

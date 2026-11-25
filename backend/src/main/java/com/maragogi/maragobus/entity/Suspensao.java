@@ -1,6 +1,7 @@
 package com.maragogi.maragobus.entity;
 
 import com.maragogi.maragobus.enums.DuracaoSuspensao;
+import com.maragogi.maragobus.enums.StatusSuspensao;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -25,19 +26,27 @@ public class Suspensao {
     private Advertencia advertenciaOrigem;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "duracao", nullable = false, length = 20)
+    @Column(name = "duracao", length = 20)
     private DuracaoSuspensao duracao;
 
-    @Column(name = "data_inicio", nullable = false)
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private StatusSuspensao status = StatusSuspensao.APLICADA;
+
+    @Column(length = 500)
+    private String justificativa;
+
+    @Column(name = "data_inicio")
     private LocalDate dataInicio;
 
-    @Column(name = "data_fim", nullable = false)
+    @Column(name = "data_fim")
     private LocalDate dataFim;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "administrador_responsavel_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "administrador_responsavel_id")
     private Usuario administradorResponsavel;
 
-    @Column(name = "data_hora_aplicacao", nullable = false)
+    @Column(name = "data_hora_aplicacao")
     private LocalDateTime dataHoraAplicacao;
 }

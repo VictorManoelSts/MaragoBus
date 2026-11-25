@@ -79,6 +79,7 @@ public class DataSemFuncionamentoService {
         String motivoNormalizado = normalizarMotivo(dados.motivo());
         Usuario admin = validarAdministrador(administradorId);
 
+        datasSemFuncionamento.bloquearCalendarioParaAlteracao();
         LocalDateTime agora = LocalDateTime.now(clock);
         LocalDate hoje = agora.toLocalDate();
         LocalDate data = dados.data();
@@ -115,12 +116,16 @@ public class DataSemFuncionamentoService {
             for (Suspensao suspensao : suspensoesAfetadas) {
                 LocalDate novaDataFim = regrasTemporaisSuspensao.estenderDataFim(
                         suspensao.getDataFim(), bloqueiosFuturos);
-                suspensao.setDataFim(novaDataFim);
 
                 UUID alunoId = suspensao.getAdvertenciaOrigem()
                         .getSolicitacaoAdvertencia()
                         .getAluno()
                         .getId();
+                LocalDate primeiroDiaDaExtensao = suspensao.getDataFim().plusDays(1);
+                if (suspensoes.existeSobreposicao(alunoId, suspensao.getId(), primeiroDiaDaExtensao, novaDataFim)) {
+                    throw new RegraNegocioException("A extensão da suspensão sobrepõe outro período.");
+                }
+                suspensao.setDataFim(novaDataFim);
                 List<Reserva> reservasNaNovaData = reservas.findByAlunoIdAndStatusReservaAndDataUtilizacaoBetweenOrderById(
                         alunoId, StatusReserva.CONFIRMADA, novaDataFim, novaDataFim);
                 for (Reserva reserva : reservasNaNovaData) {
@@ -155,6 +160,7 @@ public class DataSemFuncionamentoService {
         DataSemFuncionamento registro = datasSemFuncionamento.findById(id)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Data sem funcionamento não encontrada."));
 
+        datasSemFuncionamento.bloquearCalendarioParaAlteracao();
         LocalDate hoje = LocalDate.now(clock);
         if (registro.getData().isBefore(hoje)) {
             throw new RegraNegocioException("Não é permitido remover uma data sem funcionamento passada.");

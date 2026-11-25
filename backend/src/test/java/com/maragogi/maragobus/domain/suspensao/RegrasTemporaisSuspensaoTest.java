@@ -54,10 +54,10 @@ class RegrasTemporaisSuspensaoTest {
     }
 
     @Test
-    void deveIniciarNoMesmoDiaQuandoAplicadaAntesDas11EmDiaDeTransporte() {
+    void deveIniciarNoDiaSeguinteMesmoQuandoAplicadaAntesDas11() {
         // Quarta-feira 07/10/2026 às 10:59
         LocalDateTime aplicacao = LocalDateTime.of(2026, 10, 7, 10, 59);
-        assertEquals(LocalDate.of(2026, 10, 7), regras.calcularDataInicio(aplicacao));
+        assertEquals(LocalDate.of(2026, 10, 8), regras.calcularDataInicio(aplicacao));
     }
 
     @Test

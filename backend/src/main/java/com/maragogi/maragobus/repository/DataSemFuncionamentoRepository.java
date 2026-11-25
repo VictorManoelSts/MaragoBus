@@ -13,6 +13,13 @@ import java.util.Set;
 import java.util.UUID;
 
 public interface DataSemFuncionamentoRepository extends JpaRepository<DataSemFuncionamento, UUID> {
+    // Locks transacionais do calendário. Decisões de suspensão podem lê-lo em paralelo.
+    @Query(value = "select 1 from pg_advisory_xact_lock_shared(80721, 1)", nativeQuery = true)
+    int bloquearCalendarioParaLeitura();
+
+    @Query(value = "select 1 from pg_advisory_xact_lock(80721, 1)", nativeQuery = true)
+    int bloquearCalendarioParaAlteracao();
+
     boolean existsByData(LocalDate data);
 
     Optional<DataSemFuncionamento> findByData(LocalDate data);

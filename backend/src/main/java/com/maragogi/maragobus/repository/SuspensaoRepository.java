@@ -10,11 +10,23 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface SuspensaoRepository extends JpaRepository<Suspensao, UUID> {
 
     List<Suspensao> findByAdvertenciaOrigemSolicitacaoAdvertenciaAlunoId(UUID alunoId);
+
+    @Query("select s.advertenciaOrigem.solicitacaoAdvertencia.aluno.id from Suspensao s where s.id = :id")
+    Optional<UUID> findAlunoId(@Param("id") UUID id);
+
+    @Query("""
+            select count(s.id) > 0 from Suspensao s
+            where s.advertenciaOrigem.solicitacaoAdvertencia.aluno.id = :alunoId
+              and s.id <> :id and s.dataInicio <= :fim and s.dataFim >= :inicio
+            """)
+    boolean existeSobreposicao(@Param("alunoId") UUID alunoId, @Param("id") UUID id,
+                              @Param("inicio") LocalDate inicio, @Param("fim") LocalDate fim);
 
     @Query("""
             select count(s.id) > 0

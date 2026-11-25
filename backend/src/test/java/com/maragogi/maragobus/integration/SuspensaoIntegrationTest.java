@@ -2,6 +2,8 @@ package com.maragogi.maragobus.integration;
 
 import com.maragogi.maragobus.dto.reserva.CriacaoReservaRequest;
 import com.maragogi.maragobus.dto.solicitacaoadvertencia.AprovacaoSolicitacaoAdvertenciaRequest;
+import com.maragogi.maragobus.dto.suspensao.DefinicaoDuracaoSuspensaoRequest;
+import com.maragogi.maragobus.dto.suspensao.SuspensaoResponse;
 import com.maragogi.maragobus.entity.*;
 import com.maragogi.maragobus.enums.*;
 import com.maragogi.maragobus.exception.RegraNegocioException;
@@ -19,6 +21,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
@@ -29,6 +32,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import javax.sql.DataSource;
+import java.nio.charset.StandardCharsets;
+import java.sql.DriverManager;
 import java.time.*;
 import java.util.UUID;
 import java.util.concurrent.*;
@@ -111,6 +116,8 @@ class SuspensaoIntegrationTest {
         transacao.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         transacao.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
         transacao.executeWithoutResult(status -> {
+            jdbc.execute("truncate table eventos_reserva");
+            jdbc.update("update advertencias set suspensao_id = null where suspensao_id is not null");
             suspensoes.deleteAllInBatch();
             advertencias.deleteAllInBatch();
             solicitacoes.deleteAllInBatch();
@@ -167,57 +174,58 @@ class SuspensaoIntegrationTest {
     }
 
     @Test
-    void deveGerarSuspensaoAntesDas11CancelarReservaDoDiaEBloquearNovaReserva() {
-        // Quarta-feira 07/10/2026 às 09:30 (antes das 11:00)
+    void terceiraAprovacaoVinculaAdvertenciasSemCancelarEDecisaoPreservaReservasDoDia() {
         LocalDate quarta = LocalDate.of(2026, 10, 7);
-        LocalDate quinta = LocalDate.of(2026, 10, 8);
-        UUID reservaQuartaId = criarReservaConfirmada(quarta);
-
-        var r1 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Ocorrência 1"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
-        var r2 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Ocorrência 2"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
-        assertNull(r1.suspensaoId());
-        assertNull(r2.suspensaoId());
-
-        var r3 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Ocorrência 3"), new AprovacaoSolicitacaoAdvertenciaRequest("Gatilho", 1));
-        assertNotNull(r3.suspensaoId());
+        LocalDate quinta = quarta.plusDays(1);
+        UUID reservaQuarta = criarReservaConfirmada(quarta);
+        UUID reservaQuinta = criarReservaConfirmada(quinta);
+        UUID pendencia = aprovarCiclo();
 
         transacao.executeWithoutResult(status -> {
             assertEquals(3, advertencias.count());
             assertEquals(1, suspensoes.count());
-
-            var suspensao = suspensoes.findById(r3.suspensaoId()).orElseThrow();
-            assertEquals(DuracaoSuspensao.UM_DIA, suspensao.getDuracao());
-            assertEquals(quarta, suspensao.getDataInicio());
-            assertEquals(quarta, suspensao.getDataFim());
-            assertEquals(r3.advertenciaId(), suspensao.getAdvertenciaOrigem().getId());
-            assertEquals(adminId, suspensao.getAdministradorResponsavel().getId());
-            assertEquals(LocalDateTime.of(2026, 10, 7, 9, 30), suspensao.getDataHoraAplicacao());
-
-            var reservaQuarta = reservas.findById(reservaQuartaId).orElseThrow();
-            assertEquals(StatusReserva.CANCELADA_POR_SUSPENSAO, reservaQuarta.getStatusReserva());
-            assertEquals(LocalDateTime.of(2026, 10, 7, 9, 30), reservaQuarta.getDataHoraCancelamento());
-
-            var historico = eventos.findByReservaIdOrderByDataHoraEventoAscIdAsc(reservaQuartaId);
-            assertEquals(1, historico.size());
-            var evento = historico.getFirst();
-            assertEquals(TipoEventoReserva.CANCELAMENTO_POR_SUSPENSAO,
-                    evento.getTipoEvento());
-            assertEquals(StatusReserva.CONFIRMADA, evento.getStatusAnterior());
-            assertEquals(reservaQuarta.getStatusReserva(), evento.getStatusNovo());
-            assertEquals(reservaQuarta.getDataHoraCancelamento(), evento.getDataHoraEvento());
-            assertEquals(adminId, evento.getAutorId());
-            assertEquals("Reserva cancelada automaticamente por suspensão vigente.", evento.getMotivo());
+            for (var advertencia : advertencias.findAll()) {
+                assertEquals(pendencia, advertencia.getSuspensao().getId());
+            }
+            var suspensao = suspensoes.findById(pendencia).orElseThrow();
+            assertEquals(StatusSuspensao.PENDENTE_DURACAO, suspensao.getStatus());
+            assertNull(suspensao.getDuracao());
+            assertNull(suspensao.getDataInicio());
+            assertNull(suspensao.getAdministradorResponsavel());
+            assertEquals(StatusReserva.CONFIRMADA, reservas.findById(reservaQuarta).orElseThrow().getStatusReserva());
+            assertEquals(StatusReserva.CONFIRMADA, reservas.findById(reservaQuinta).orElseThrow().getStatusReserva());
+            assertEquals(0, eventos.count());
         });
+        var pendentes = suspensaoService.consultarPorAluno(adminId, alunoId, 0, 10);
+        assertEquals(StatusSuspensao.PENDENTE_DURACAO, pendentes.getContent().getFirst().status());
+        assertFalse(pendentes.getContent().getFirst().vigente());
 
-        // Ainda antes das 11:00: janela de quarta está aberta, mas o aluno está suspenso.
-        var erro = assertThrows(RegraNegocioException.class,
-                () -> reservaService.cadastrar(alunoId, new CriacaoReservaRequest(quarta)));
-        assertEquals("O aluno está suspenso para a data de utilização informada.", erro.getMessage());
+        relogio.definir("2026-10-07T10:00:00");
+        var aplicada = aplicar(pendencia, 1);
 
-        // Às 17:00 abre a reserva de quinta (fora da suspensão): deve permitir normalmente.
-        relogio.definir("2026-10-07T17:00:00");
-        var reservaQuinta = reservaService.cadastrar(alunoId, new CriacaoReservaRequest(quinta));
-        assertEquals(StatusReserva.CONFIRMADA, reservaQuinta.statusReserva());
+        assertEquals(StatusSuspensao.APLICADA, aplicada.status());
+        assertEquals(quinta, aplicada.dataInicio());
+        assertEquals(quinta, aplicada.dataFim());
+        assertEquals(adminId, aplicada.administradorResponsavelId());
+        assertEquals("Reincidência", aplicada.justificativa());
+        assertEquals(quarta.atTime(10, 0), aplicada.dataHoraAplicacao());
+
+        var preservada = reservas.findById(reservaQuarta).orElseThrow();
+        assertEquals(StatusReserva.CONFIRMADA, preservada.getStatusReserva());
+        assertNull(preservada.getDataHoraCancelamento());
+        assertTrue(eventos.findByReservaIdOrderByDataHoraEventoAscIdAsc(reservaQuarta).isEmpty());
+
+        var cancelada = reservas.findById(reservaQuinta).orElseThrow();
+        assertEquals(StatusReserva.CANCELADA_POR_SUSPENSAO, cancelada.getStatusReserva());
+        var historico = eventos.findByReservaIdOrderByDataHoraEventoAscIdAsc(reservaQuinta);
+        assertEquals(1, historico.size());
+        var evento = historico.getFirst();
+        assertEquals(TipoEventoReserva.CANCELAMENTO_POR_SUSPENSAO, evento.getTipoEvento());
+        assertEquals(StatusReserva.CONFIRMADA, evento.getStatusAnterior());
+        assertEquals(cancelada.getStatusReserva(), evento.getStatusNovo());
+        assertEquals(aplicada.dataHoraAplicacao(), evento.getDataHoraEvento());
+        assertEquals(adminId, evento.getAutorId());
+        assertEquals("Reincidência", evento.getMotivo());
     }
 
     @Test
@@ -232,7 +240,8 @@ class SuspensaoIntegrationTest {
 
         analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 1"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
         analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 2"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
-        var r3 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 3"), new AprovacaoSolicitacaoAdvertenciaRequest(null, 1));
+        var r3 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 3"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
+        aplicar(r3.suspensaoId(), 1);
         assertNotNull(r3.suspensaoId());
 
         transacao.executeWithoutResult(status -> {
@@ -259,20 +268,17 @@ class SuspensaoIntegrationTest {
 
     @Test
     void deveAplicarDuracoesEscolhidasEmCadaCicloPulandoFimDeSemanaEConsultarVigencia() {
-        // Ciclo 1: 3ª advertência na quarta 07/10 às 09:00 -> 1 dia (07/10 a 07/10)
-        relogio.definir("2026-10-07T09:00:00");
-        for (int i = 1; i <= 3; i++) {
-            analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv " + i), new AprovacaoSolicitacaoAdvertenciaRequest(null, i == 3 ? 1 : null));
-        }
+        relogio.definir("2026-10-06T09:00:00");
+        aplicar(aprovarCiclo(), 1);
 
-        // Ciclo 2: 6ª advertência na quinta 08/10 às 10:00 -> 3 dias úteis: Qui(08), Sex(09), pula Sab/Dom, Seg(12)
-        relogio.definir("2026-10-08T10:00:00");
+        relogio.definir("2026-10-07T10:00:00");
         UUID reservaSegundaId = criarReservaConfirmada(LocalDate.of(2026, 10, 12));
         UUID reservaTercaId = criarReservaConfirmada(LocalDate.of(2026, 10, 13));
 
         analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 4"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
         analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 5"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
-        var r6 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 6"), new AprovacaoSolicitacaoAdvertenciaRequest(null, 3));
+        var r6 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 6"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
+        aplicar(r6.suspensaoId(), 3);
         assertNotNull(r6.suspensaoId());
 
         transacao.executeWithoutResult(status -> {
@@ -291,12 +297,13 @@ class SuspensaoIntegrationTest {
                 () -> reservaService.cadastrar(alunoId, new CriacaoReservaRequest(LocalDate.of(2026, 10, 12))));
 
         // Ciclo 3: 9ª advertência na quarta 14/10 às 10:00 -> 5 dias úteis: Qua(14), Qui(15), Sex(16), Seg(19), Ter(20)
-        relogio.definir("2026-10-14T10:00:00");
+        relogio.definir("2026-10-13T10:00:00");
         UUID reservaUltimoDiaId = criarReservaConfirmada(LocalDate.of(2026, 10, 20));
         UUID reservaAposSuspensaoId = criarReservaConfirmada(LocalDate.of(2026, 10, 21));
         analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 7"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
         analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 8"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
-        var r9 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 9"), new AprovacaoSolicitacaoAdvertenciaRequest(null, 5));
+        var r9 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 9"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
+        aplicar(r9.suspensaoId(), 5);
         assertNotNull(r9.suspensaoId());
 
         transacao.executeWithoutResult(status -> {
@@ -313,6 +320,7 @@ class SuspensaoIntegrationTest {
                     reservas.findById(reservaAposSuspensaoId).orElseThrow().getStatusReserva());
         });
 
+        relogio.definir("2026-10-14T10:00:00");
         // Consultas administrativas em 14/10/2026: 3 históricas, apenas 1 vigente
         var historicoAluno = suspensaoService.consultarPorAluno(adminId, alunoId, 0, 10);
         assertEquals(3, historicoAluno.getTotalElements());
@@ -325,47 +333,37 @@ class SuspensaoIntegrationTest {
     }
 
     @Test
-    void deveRejeitarDuracaoInvalidaOuForaDoCicloEPreservarSolicitacaoParaNovaDecisao() {
-        UUID primeiraId = novaSolicitacaoPendente("Adv 1");
-        UUID reservaId = criarReservaConfirmada(LocalDate.of(2026, 10, 13));
+    void deveRejeitarDuracaoInvalidaEImpedirSobreposicaoMantendoPendencia() {
+        UUID primeira = aprovarCiclo();
+        UUID segunda = aprovarCiclo();
 
-        assertThrows(RegraNegocioException.class, () -> analiseService.aprovar(
-                adminId, primeiraId, new AprovacaoSolicitacaoAdvertenciaRequest(null, 5)));
-        assertEquals(0, advertencias.count());
+        assertThrows(RegraNegocioException.class, () -> aplicar(primeira, 2));
+        assertThrows(RegraNegocioException.class, () -> suspensaoService.definirDuracao(
+                alunoId, primeira, new DefinicaoDuracaoSuspensaoRequest(1, "Reincidência")));
+        assertEquals(StatusSuspensao.PENDENTE_DURACAO, suspensoes.findById(primeira).orElseThrow().getStatus());
 
-        analiseService.aprovar(adminId, primeiraId, new AprovacaoSolicitacaoAdvertenciaRequest(null));
-        analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 2"),
-                new AprovacaoSolicitacaoAdvertenciaRequest(null));
-        UUID terceiraId = novaSolicitacaoPendente("Adv 3");
-
-        assertThrows(RegraNegocioException.class, () -> analiseService.aprovar(
-                adminId, terceiraId, new AprovacaoSolicitacaoAdvertenciaRequest(null)));
-        assertThrows(RegraNegocioException.class, () -> analiseService.aprovar(
-                adminId, terceiraId, new AprovacaoSolicitacaoAdvertenciaRequest(null, 2)));
-
-        assertEquals(2, advertencias.count());
-        assertEquals(0, suspensoes.count());
-        assertEquals(StatusSolicitacaoAdvertencia.PENDENTE, solicitacoes.findById(terceiraId).orElseThrow().getStatus());
-        assertEquals(StatusReserva.CONFIRMADA, reservas.findById(reservaId).orElseThrow().getStatusReserva());
-        assertTrue(eventos.findByReservaIdOrderByDataHoraEventoAscIdAsc(reservaId).isEmpty());
-
-        var resposta = analiseService.aprovar(adminId, terceiraId,
-                new AprovacaoSolicitacaoAdvertenciaRequest(null, 5));
-        var suspensao = suspensoes.findById(resposta.suspensaoId()).orElseThrow();
-        assertEquals(DuracaoSuspensao.CINCO_DIAS, suspensao.getDuracao());
-        assertEquals(LocalDate.of(2026, 10, 13), suspensao.getDataFim());
-        assertEquals(StatusReserva.CANCELADA_POR_SUSPENSAO, reservas.findById(reservaId).orElseThrow().getStatusReserva());
+        aplicar(primeira, 3);
+        assertThrows(RegraNegocioException.class, () -> aplicar(segunda, 1));
+        transacao.executeWithoutResult(status -> {
+            var pendencia = suspensoes.findById(segunda).orElseThrow();
+            assertEquals(StatusSuspensao.PENDENTE_DURACAO, pendencia.getStatus());
+            assertNull(pendencia.getDuracao());
+            assertNull(pendencia.getDataHoraAplicacao());
+            assertEquals(3, advertencias.findAll().stream()
+                    .filter(a -> segunda.equals(a.getSuspensao().getId())).count());
+        });
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"suspensoes", "eventos_reserva"})
     void deveFazerRollbackAtomicoQuandoPersistenciaDaSuspensaoOuDoEventoFalharNoPostgres(String tabela) {
-        LocalDate quarta = LocalDate.of(2026, 10, 7);
-        UUID reservaId = criarReservaConfirmada(quarta);
-
+        UUID reservaId = criarReservaConfirmada(LocalDate.of(2026, 10, 8));
         analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 1"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
         analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 2"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
         UUID terceiraSolicitacaoId = novaSolicitacaoPendente("Adv 3");
+        boolean falhaNaAprovacao = tabela.equals("suspensoes");
+        UUID pendencia = falhaNaAprovacao ? null : analiseService.aprovar(adminId, terceiraSolicitacaoId,
+                new AprovacaoSolicitacaoAdvertenciaRequest(null)).suspensaoId();
 
         jdbc.execute("""
                 create function falhar_suspensao_teste() returns trigger language plpgsql as $$
@@ -378,7 +376,14 @@ class SuspensaoIntegrationTest {
             jdbc.execute("create trigger falhar_suspensao_teste after insert on " + tabela
                     + " for each row execute function falhar_suspensao_teste()");
             var erro = assertThrows(DataIntegrityViolationException.class,
-                    () -> analiseService.aprovar(adminId, terceiraSolicitacaoId, new AprovacaoSolicitacaoAdvertenciaRequest("Falha", 1)));
+                    () -> {
+                        if (falhaNaAprovacao) {
+                            analiseService.aprovar(adminId, terceiraSolicitacaoId,
+                                    new AprovacaoSolicitacaoAdvertenciaRequest("Falha"));
+                        } else {
+                            aplicar(pendencia, 1);
+                        }
+                    });
             assertTrue(erro.getMostSpecificCause().getMessage().contains("FALHA_CONTROLADA_SUSPENSAO"));
         } finally {
             jdbc.execute("drop trigger if exists falhar_suspensao_teste on " + tabela);
@@ -386,9 +391,19 @@ class SuspensaoIntegrationTest {
         }
 
         transacao.executeWithoutResult(status -> {
-            assertEquals(StatusSolicitacaoAdvertencia.PENDENTE, solicitacoes.findById(terceiraSolicitacaoId).orElseThrow().getStatus());
-            assertEquals(2, advertencias.count());
-            assertEquals(0, suspensoes.count());
+            assertEquals(falhaNaAprovacao ? StatusSolicitacaoAdvertencia.PENDENTE : StatusSolicitacaoAdvertencia.APROVADA,
+                    solicitacoes.findById(terceiraSolicitacaoId).orElseThrow().getStatus());
+            assertEquals(falhaNaAprovacao ? 2 : 3, advertencias.count());
+            assertEquals(falhaNaAprovacao ? 0 : 1, suspensoes.count());
+            if (!falhaNaAprovacao) {
+                var suspensao = suspensoes.findById(pendencia).orElseThrow();
+                assertEquals(StatusSuspensao.PENDENTE_DURACAO, suspensao.getStatus());
+                assertNull(suspensao.getDuracao());
+                assertNull(suspensao.getDataInicio());
+                assertNull(suspensao.getJustificativa());
+                assertEquals(3, advertencias.findAll().stream()
+                        .filter(a -> pendencia.equals(a.getSuspensao().getId())).count());
+            }
             var reserva = reservas.findById(reservaId).orElseThrow();
             assertEquals(StatusReserva.CONFIRMADA, reserva.getStatusReserva());
             assertNull(reserva.getDataHoraCancelamento());
@@ -419,7 +434,7 @@ class SuspensaoIntegrationTest {
             try {
                 assertTrue(primeiraAplicada.await(15, TimeUnit.SECONDS));
                 var segunda = executor.submit(() ->
-                        analiseService.aprovar(adminId, terceiraId, new AprovacaoSolicitacaoAdvertenciaRequest("Terceira", 1)));
+                        analiseService.aprovar(adminId, terceiraId, new AprovacaoSolicitacaoAdvertenciaRequest("Terceira")));
 
                 assertTrue(aguardarLockEmUsuarios(), "A segunda aprovação do mesmo aluno deve aguardar o lock do aluno.");
                 liberarCommit.countDown();
@@ -433,7 +448,7 @@ class SuspensaoIntegrationTest {
                 transacao.executeWithoutResult(status -> {
                     assertEquals(3, advertencias.count());
                     assertEquals(1, suspensoes.count());
-                    assertEquals(StatusReserva.CANCELADA_POR_SUSPENSAO,
+                    assertEquals(StatusReserva.CONFIRMADA,
                             reservas.findById(reservaId).orElseThrow().getStatusReserva());
                 });
             } finally {
@@ -448,16 +463,14 @@ class SuspensaoIntegrationTest {
         relogio.definir("2026-10-07T18:00:00");
         LocalDate quinta = LocalDate.of(2026, 10, 8);
 
-        analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 1"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
-        analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 2"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
-        UUID terceiraId = novaSolicitacaoPendente("Adv 3");
+        UUID pendencia = aprovarCiclo();
 
         var suspensaoAplicada = new CountDownLatch(1);
         var liberarCommit = new CountDownLatch(1);
 
         try (var executor = Executors.newFixedThreadPool(2)) {
             var aprovacao = executor.submit(() -> transacao.execute(status -> {
-                var resposta = analiseService.aprovar(adminId, terceiraId, new AprovacaoSolicitacaoAdvertenciaRequest("Terceira", 1));
+                var resposta = aplicar(pendencia, 1);
                 suspensoes.flush();
                 suspensaoAplicada.countDown();
                 try { assertTrue(liberarCommit.await(15, TimeUnit.SECONDS)); }
@@ -472,7 +485,7 @@ class SuspensaoIntegrationTest {
                 assertTrue(aguardarLockEmUsuarios(), "A criação de reserva concorrente deve aguardar o lock do aluno.");
                 liberarCommit.countDown();
 
-                assertNotNull(aprovacao.get(15, TimeUnit.SECONDS).suspensaoId());
+                assertNotNull(aprovacao.get(15, TimeUnit.SECONDS).id());
                 var erro = assertThrows(ExecutionException.class, () -> tentativaReserva.get(15, TimeUnit.SECONDS));
                 assertInstanceOf(RegraNegocioException.class, erro.getCause());
                 assertEquals("O aluno está suspenso para a data de utilização informada.", erro.getCause().getMessage());
@@ -485,6 +498,109 @@ class SuspensaoIntegrationTest {
                 liberarCommit.countDown();
             }
         }
+    }
+
+    @Test
+    void deveAplicarUmaUnicaVezComDuasDecisoesSimultaneas() throws Exception {
+        UUID pendencia = aprovarCiclo();
+        UUID reserva = criarReservaConfirmada(LocalDate.of(2026, 10, 8));
+        var aplicada = new CountDownLatch(1);
+        var liberarCommit = new CountDownLatch(1);
+
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var primeira = executor.submit(() -> transacao.executeWithoutResult(status -> {
+                aplicar(pendencia, 1);
+                aplicada.countDown();
+                try {
+                    assertTrue(liberarCommit.await(15, TimeUnit.SECONDS));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+            }));
+            try {
+                assertTrue(aplicada.await(15, TimeUnit.SECONDS));
+                var segunda = executor.submit(() -> aplicar(pendencia, 3));
+                assertTrue(aguardarLockEmUsuarios());
+                liberarCommit.countDown();
+                primeira.get(15, TimeUnit.SECONDS);
+                var erro = assertThrows(ExecutionException.class, () -> segunda.get(15, TimeUnit.SECONDS));
+                assertInstanceOf(RegraNegocioException.class, erro.getCause());
+            } finally {
+                liberarCommit.countDown();
+            }
+        }
+
+        assertEquals(DuracaoSuspensao.UM_DIA, suspensoes.findById(pendencia).orElseThrow().getDuracao());
+        assertEquals(1, eventos.findByReservaIdOrderByDataHoraEventoAscIdAsc(reserva).size());
+    }
+
+    @Test
+    void deveMigrarSuspensoesLegadasEVincularSomenteAdvertenciasDosCiclosFechados() throws Exception {
+        String migracao = new ClassPathResource("db/migration/V1_1__suspensao_pendente_duracao.sql")
+                .getContentAsString(StandardCharsets.UTF_8);
+        try (var conexao = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+             var sql = conexao.createStatement()) {
+            sql.execute("""
+                    create temporary table solicitacoes_advertencia (
+                        id uuid primary key, aluno_id uuid, data_hora_analise timestamp, status varchar(20)
+                    );
+                    create temporary table advertencias (
+                        id uuid primary key, solicitacao_advertencia_id uuid
+                    );
+                    create temporary table suspensoes (
+                        id uuid primary key, advertencia_origem_id uuid, duracao varchar(20) not null,
+                        data_inicio date not null, data_fim date not null,
+                        administrador_responsavel_id uuid not null, data_hora_aplicacao timestamp not null
+                    );
+                    insert into solicitacoes_advertencia
+                    select md5(n::text)::uuid, md5('aluno')::uuid, date '2026-10-01' + n, 'APROVADA'
+                    from generate_series(1, 7) n;
+                    insert into advertencias select id, id from solicitacoes_advertencia;
+                    insert into suspensoes
+                    select md5('ciclo' || n)::uuid, md5(n::text)::uuid, 'UM_DIA',
+                           date '2026-10-01' + n, date '2026-10-01' + n,
+                           md5('admin')::uuid, date '2026-10-01' + n
+                    from (values (3), (6)) ciclos(n);
+                    """);
+            sql.execute(migracao);
+
+            try (var registros = sql.executeQuery("""
+                    select a.suspensao_id, s.status, s.duracao,
+                           s.advertencia_origem_id = md5('3')::uuid as primeiro_ciclo
+                    from advertencias a
+                    join solicitacoes_advertencia sa on sa.id = a.solicitacao_advertencia_id
+                    left join suspensoes s on s.id = a.suspensao_id
+                    order by sa.data_hora_analise
+                    """)) {
+                for (int i = 0; i < 6; i++) {
+                    assertTrue(registros.next());
+                    assertNotNull(registros.getObject("suspensao_id"));
+                    assertEquals(i < 3, registros.getBoolean("primeiro_ciclo"));
+                    assertEquals("APLICADA", registros.getString("status"));
+                    assertEquals("UM_DIA", registros.getString("duracao"));
+                }
+                assertTrue(registros.next());
+                assertNull(registros.getObject("suspensao_id"));
+                assertFalse(registros.next());
+            }
+        }
+    }
+
+    private UUID aprovarCiclo() {
+        for (int i = 1; i <= 2; i++) {
+            assertNull(analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv " + i),
+                    new AprovacaoSolicitacaoAdvertenciaRequest(null)).suspensaoId());
+        }
+        var terceira = analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 3"),
+                new AprovacaoSolicitacaoAdvertenciaRequest(null));
+        assertNotNull(terceira.suspensaoId());
+        return terceira.suspensaoId();
+    }
+
+    private SuspensaoResponse aplicar(UUID pendencia, int dias) {
+        return suspensaoService.definirDuracao(adminId, pendencia,
+                new DefinicaoDuracaoSuspensaoRequest(dias, "Reincidência"));
     }
 
     private boolean aguardarLockEmUsuarios() throws InterruptedException {

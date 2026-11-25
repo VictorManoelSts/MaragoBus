@@ -1,6 +1,7 @@
 package com.maragogi.maragobus.dto.suspensao;
 
 import com.maragogi.maragobus.enums.DuracaoSuspensao;
+import com.maragogi.maragobus.enums.StatusSuspensao;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -13,8 +14,10 @@ public record SuspensaoResponse(
         UUID advertenciaOrigemId,
         UUID administradorResponsavelId,
         DuracaoSuspensao duracao,
-        int duracaoDiasTransporte,
+        Integer duracaoDiasTransporte,
         LocalDate dataInicio,
         LocalDate dataFim,
         LocalDateTime dataHoraAplicacao,
-        boolean vigente) {}
+        boolean vigente,
+        StatusSuspensao status,
+        String justificativa) {}

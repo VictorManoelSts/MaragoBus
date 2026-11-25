@@ -21,4 +21,7 @@ public class Advertencia {
     @JoinColumn(name = "solicitacao_advertencia_id", nullable = false, unique = true)
     private SolicitacaoAdvertencia solicitacaoAdvertencia;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "suspensao_id")
+    private Suspensao suspensao;
 }

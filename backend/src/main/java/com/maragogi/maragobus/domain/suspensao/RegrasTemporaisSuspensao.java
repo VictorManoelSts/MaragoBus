@@ -7,14 +7,12 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.Objects;
 import java.util.Set;
 
 /** Regras puras de ciclos e calendário de suspensão; sem acesso à persistência. */
 @Component
 public class RegrasTemporaisSuspensao {
-    private static final LocalTime LIMITE_INICIO_MESMO_DIA = LocalTime.of(11, 0);
     private final RegrasTemporaisReserva regrasTemporaisReserva;
 
     public RegrasTemporaisSuspensao(RegrasTemporaisReserva regrasTemporaisReserva) {
@@ -32,13 +30,9 @@ public class RegrasTemporaisSuspensao {
                 return duracao;
             }
         }
-        throw new RegraNegocioException("Ao completar um ciclo, informe uma suspensão de 1, 3 ou 5 dias de transporte.");
+        throw new RegraNegocioException("Informe uma suspensão de 1, 3 ou 5 dias de transporte.");
     }
 
-    /**
-     * Antes das 11:00 em dia de transporte -> inicia no próprio dia.
-     * A partir das 11:00 ou em dia sem transporte -> inicia no próximo dia de transporte.
-     */
     public LocalDate calcularDataInicio(LocalDateTime dataHoraAplicacao) {
         return calcularDataInicio(dataHoraAplicacao, Set.of());
     }
@@ -46,14 +40,7 @@ public class RegrasTemporaisSuspensao {
     public LocalDate calcularDataInicio(LocalDateTime dataHoraAplicacao, Set<LocalDate> datasSemFuncionamento) {
         Objects.requireNonNull(dataHoraAplicacao, "A data e hora de aplicação são obrigatórias.");
         Objects.requireNonNull(datasSemFuncionamento, "As datas sem funcionamento são obrigatórias.");
-        LocalDate data = dataHoraAplicacao.toLocalDate();
-        LocalTime hora = dataHoraAplicacao.toLocalTime();
-
-        if (regrasTemporaisReserva.ehDiaTransporte(data, datasSemFuncionamento)
-                && hora.isBefore(LIMITE_INICIO_MESMO_DIA)) {
-            return data;
-        }
-        return regrasTemporaisReserva.proximoDiaTransporte(data, datasSemFuncionamento);
+        return regrasTemporaisReserva.proximoDiaTransporte(dataHoraAplicacao.toLocalDate(), datasSemFuncionamento);
     }
 
     /** Conta somente dias com funcionamento do transporte, sendo dataInicio o 1º dia. */

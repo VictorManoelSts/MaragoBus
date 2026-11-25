@@ -203,8 +203,7 @@ class AnaliseSolicitacaoAdvertenciaServiceTest {
             assertEquals(LocalDateTime.parse("2026-10-12T17:15:30"), s.getDataHoraAnalise());
             a.setId(UUID.randomUUID()); return a;
         });
-        when(suspensaoService.avaliarEAplicarPorAdvertencia(
-                any(Advertencia.class), eq(admin), eq(LocalDateTime.parse("2026-10-12T17:15:30")), isNull()))
+        when(suspensaoService.avaliarSuspensaoPendente(any(Advertencia.class)))
                 .thenReturn(Optional.empty());
     }
 
@@ -225,8 +224,7 @@ class AnaliseSolicitacaoAdvertenciaServiceTest {
         ordem.verify(solicitacoes).findByIdParaAnalise(id);
         ordem.verify(usuarios).findByIdParaCriarReserva(aluno.getId());
         ordem.verify(advertencias).saveAndFlush(any(Advertencia.class));
-        ordem.verify(suspensaoService).avaliarEAplicarPorAdvertencia(
-                any(Advertencia.class), eq(admin), eq(LocalDateTime.parse("2026-10-12T17:15:30")), isNull());
+        ordem.verify(suspensaoService).avaliarSuspensaoPendente(any(Advertencia.class));
         verifyNoMoreInteractions(usuarios, solicitacoes, advertencias, suspensaoService);
     }
 
@@ -240,11 +238,10 @@ class AnaliseSolicitacaoAdvertenciaServiceTest {
             return a;
         });
         UUID suspensaoId = UUID.randomUUID();
-        when(suspensaoService.avaliarEAplicarPorAdvertencia(
-                any(Advertencia.class), eq(admin), eq(LocalDateTime.parse("2026-10-12T17:15:30")), eq(5)))
+        when(suspensaoService.avaliarSuspensaoPendente(any(Advertencia.class)))
                 .thenReturn(Optional.of(Suspensao.builder().id(suspensaoId).build()));
 
-        var resposta = service().aprovar(admin.getId(), s.getId(), new AprovacaoSolicitacaoAdvertenciaRequest("Terceira advertência", 5));
+        var resposta = service().aprovar(admin.getId(), s.getId(), new AprovacaoSolicitacaoAdvertenciaRequest("Terceira advertência"));
 
         assertEquals(suspensaoId, resposta.suspensaoId());
     }
