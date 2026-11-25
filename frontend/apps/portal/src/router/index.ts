@@ -48,8 +48,12 @@ const routes: RouteRecordRaw[] = [
       ...[...driverFeatures, driverProfile].map(item => ({
         path: item.path.slice('/motorista/'.length),
         name: item.name,
-        component: () => import('../pages/PortalPlaceholderPage.vue'),
-        props: { title: item.title, description: item.description, showLogout: item.name === 'driver-profile' },
+        component: item.name === 'driver-reservations'
+          ? () => import('../pages/DriverReservationsPage.vue')
+          : () => import('../pages/PortalPlaceholderPage.vue'),
+        props: item.name === 'driver-reservations'
+          ? false
+          : { title: item.title, description: item.description, showLogout: item.name === 'driver-profile' },
       })),
     ],
   },

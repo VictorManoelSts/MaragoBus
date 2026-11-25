@@ -28,16 +28,16 @@ const driverName = computed(() => session.user?.name.trim())
               </div>
             </template>
             <div class="space-y-3">
-              <BaseBadge>Em desenvolvimento</BaseBadge>
+              <BaseBadge>{{ feature.name === 'driver-reservations' ? 'Disponível' : 'Em desenvolvimento' }}</BaseBadge>
               <p class="text-helper text-muted">{{ feature.availability }}</p>
             </div>
             <template #footer>
               <RouterLink
                 :to="{ name: feature.name }"
-                :aria-label="`Ver informações sobre ${feature.title.toLowerCase()}`"
+                :aria-label="feature.name === 'driver-reservations' ? 'Consultar reservas' : `Ver informações sobre ${feature.title.toLowerCase()}`"
                 class="mb-button mb-button--outline mb-button--md"
               >
-                Ver informações
+                {{ feature.name === 'driver-reservations' ? 'Consultar reservas' : 'Ver informações' }}
               </RouterLink>
             </template>
           </BaseCard>

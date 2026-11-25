@@ -136,7 +136,7 @@ describe('Largura do Portal nos dois perfis', () => {
       expect(nav.findAll('a')).toHaveLength(count)
       expect(nav.get('a[aria-current="page"]').attributes('href')).toBe(path)
     }
-    expect(wrapper.get('main p').classes()).toContain('max-w-prose')
+    if (path === '/reservas') expect(wrapper.get('main p').classes()).toContain('max-w-prose')
     expect(wrapper.findAll('main')).toHaveLength(1)
   })
 })

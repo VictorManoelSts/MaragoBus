@@ -9,6 +9,7 @@ import { getReceiptAvailability } from '../utils/reservation-receipt'
 
 type SimulatedReservation = Omit<StudentReservationSummary, 'status'> & {
   studentId: string
+  studentName?: string
   boardingPointId: string
   confirmedAt: string
 } & ({ status: 'confirmed'; cancelledAt?: never } | { status: 'cancelled'; cancelledAt: string })
@@ -39,6 +40,15 @@ export const useReservationsStore = defineStore('reservations', () => {
   function findConfirmed(travelDate: TravelDate) {
     const reservation = findReservation(travelDate)
     return reservation?.status === 'confirmed' ? reservation : undefined
+  }
+
+  function listDriverReservations(travelDate: TravelDate) {
+    if (!session.authenticated || session.user?.role !== 'driver') return []
+
+    return reservations.value
+      .filter(item => item.travelDate === travelDate && item.status === 'confirmed')
+      .map(({ id, studentName, college, boardingPointId, boardingPoint }) =>
+        Object.freeze({ id, studentName, college, boardingPointId, boardingPoint }))
   }
 
   function getHomeSummary(today: TravelDate): StudentHomeSummary {
@@ -79,6 +89,7 @@ export const useReservationsStore = defineStore('reservations', () => {
       const reservation: SimulatedReservation = {
         id: globalThis.crypto?.randomUUID?.() ?? `demo-reservation-${++fallbackId}`,
         studentId: result.owner,
+        studentName: session.user?.name.trim() || undefined,
         travelDate: result.date,
         college: result.college,
         boardingPoint: result.boardingPoint,
@@ -116,7 +127,7 @@ export const useReservationsStore = defineStore('reservations', () => {
   }
 
   return {
-    reservations, studentReservations, confirming, studentId, findReservation, findConfirmed,
+    studentReservations, confirming, studentId, findReservation, findConfirmed, listDriverReservations,
     getHomeSummary, getReceiptReservation, validateConfirmation, confirm, cancel,
   }
 })

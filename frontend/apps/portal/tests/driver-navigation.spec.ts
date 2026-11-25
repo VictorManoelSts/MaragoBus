@@ -12,7 +12,7 @@ import { setMockSession } from '../../../packages/shared/tests/auth-fixture'
 import { useSessionStore } from '@maragobus/shared/auth/session'
 
 const destinations = [
-  { path: '/motorista/reservas', label: 'Reservas', title: 'Reservas' },
+  { path: '/motorista/reservas', label: 'Reservas', title: 'Reservas confirmadas' },
   { path: '/motorista/advertencias', label: 'Solicitações de advertência', title: 'Solicitações de advertência' },
   { path: '/motorista/perfil', label: 'Meu perfil', title: 'Perfil do motorista' },
 ]
@@ -29,7 +29,7 @@ async function application(path: string) {
 }
 
 describe('Navegação do motorista', () => {
-  it.each(destinations)('abre diretamente $path com sessão de motorista e conteúdo provisório', async ({ path, title }) => {
+  it.each(destinations.slice(1))('abre diretamente $path com sessão de motorista e conteúdo provisório', async ({ path, title }) => {
     const { wrapper } = await application(path)
     expect(wrapper.findComponent(DriverLayout).exists()).toBe(true)
     expect(wrapper.findComponent(StudentNavigation).exists()).toBe(false)
@@ -105,7 +105,7 @@ describe('Navegação do motorista', () => {
     expect(page.get('header p').text()).toBe('Olá!')
   })
 
-  it('identifica os três serviços pendentes sem métricas ou controles operacionais', async () => {
+  it('identifica a consulta disponível e os dois serviços pendentes', async () => {
     const { wrapper } = await application('/motorista')
     const main = wrapper.get('main')
     const cards = main.findAllComponents(BaseCard)
@@ -113,7 +113,9 @@ describe('Navegação do motorista', () => {
       'Consultar reservas dos alunos', 'Solicitar advertências', 'Consultar distribuição de faculdades',
     ])
     expect(cards).toHaveLength(3)
-    for (const card of cards) expect(card.text()).toContain('Em desenvolvimento')
+    expect(cards[0]!.text()).toContain('Disponível')
+    expect(cards[0]!.get('a').text()).toBe('Consultar reservas')
+    for (const card of cards.slice(1)) expect(card.text()).toContain('Em desenvolvimento')
     expect(main.findAll('table, dl, form, input, select, button')).toHaveLength(0)
     expect(main.text()).not.toMatch(/\d/)
   })
@@ -126,7 +128,11 @@ describe('Navegação do motorista', () => {
     await flushPromises()
     expect(router.currentRoute.value.path).toBe(path)
     expect(wrapper.get('main h1').text()).toBe(title)
-    expect(wrapper.get('main').text()).toContain('Esta funcionalidade será implementada posteriormente.')
+    if (path === '/motorista/reservas') {
+      expect(wrapper.find('main input[type="date"]').exists()).toBe(true)
+    } else {
+      expect(wrapper.get('main').text()).toContain('Esta funcionalidade será implementada posteriormente.')
+    }
   })
 
   it('preserva as rotas e os cinco destinos do aluno ao trocar para sessão de aluno', async () => {
@@ -158,15 +164,6 @@ describe('Navegação do motorista', () => {
     await flushPromises()
     expect(wrapper.get('main h1').text()).toBe('Perfil do motorista')
     expect(wrapper.findAllComponents(PortalNavigation)).toHaveLength(2)
-  })
-
-  it('mantém Reservas somente como descrição das finalidades futuras, sem quantidade ou listagem simulada', async () => {
-    const { wrapper } = await application('/motorista/reservas')
-    expect(wrapper.get('main p').text()).toBe(
-      'Consulte futuramente a quantidade de alunos com reservas confirmadas, a demanda por faculdade e ponto de embarque, a listagem e pesquisa de alunos e os detalhes dos passageiros.',
-    )
-    expect(wrapper.get('main').findAll('table, form, input, select, button, ul, dl')).toHaveLength(0)
-    expect(wrapper.get('main').text()).not.toMatch(/\d/)
   })
 
   it('descreve Solicitações de advertência sem formulário nem estados operacionais simulados', async () => {
@@ -203,7 +200,7 @@ describe('Compatibilidade das rotas do motorista', () => {
   it.each(legacy)('redireciona %s para Reservas, sem acrescentar destinos aos menus', async path => {
     const { wrapper, router } = await application(path)
     expect(router.currentRoute.value.path).toBe('/motorista/reservas')
-    expect(wrapper.get('main h1').text()).toBe('Reservas')
+    expect(wrapper.get('main h1').text()).toBe('Reservas confirmadas')
     for (const nav of wrapper.findAllComponents(PortalNavigation)) {
       expect(nav.findAll('a')).toHaveLength(4)
       expect(nav.get('a[aria-current="page"]').attributes('href')).toBe('/motorista/reservas')

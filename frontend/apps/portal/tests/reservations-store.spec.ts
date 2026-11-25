@@ -32,7 +32,7 @@ describe('Store de reservas simuladas', () => {
     vi.setSystemTime(new Date(instant))
     const store = useReservationsStore()
     expect(store.confirm(request).status).toBe(status)
-    expect(store.reservations).toHaveLength(status === 'confirmed' ? 1 : 0)
+    expect(store.studentReservations).toHaveLength(status === 'confirmed' ? 1 : 0)
   })
 
   it('registra os dados confirmados e reflete a atualização reativa na consulta', () => {
@@ -43,6 +43,7 @@ describe('Store de reservas simuladas', () => {
     expect(current.value).toEqual({
       id: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
       studentId: 'mock-student-test',
+      studentName: 'Aluno de Teste',
       travelDate: '2026-11-16',
       boardingPointId: 'demo-center',
       boardingPoint: 'Praça de exemplo — Centro',
@@ -74,7 +75,7 @@ describe('Store de reservas simuladas', () => {
       if (store.confirming) expect(store.confirm(request).status).toBe('busy')
     }, { flush: 'sync' })
     expect(store.confirm(request).status).toBe('confirmed')
-    expect(store.reservations).toHaveLength(1)
+    expect(store.studentReservations).toHaveLength(1)
     expect(store.confirming).toBe(false)
     stop()
   })
@@ -83,7 +84,7 @@ describe('Store de reservas simuladas', () => {
     const store = useReservationsStore()
     expect(store.confirm({ ...request, closures: [{ date: '2026-11-16' }] }).status).toBe('unavailable')
     expect(store.confirm({ ...request, closures: [{ date: '2026-11-13' }] }).status).toBe('unavailable')
-    expect(store.reservations).toHaveLength(0)
+    expect(store.studentReservations).toHaveLength(0)
   })
 
   it('impede ponto desconhecido, faculdade ausente e sessão sem perfil de aluno', async () => {
@@ -94,7 +95,7 @@ describe('Store de reservas simuladas', () => {
     expect(store.confirm(request).status).toBe('student-required')
     useSessionStore().user = null
     expect(store.confirm(request).status).toBe('student-required')
-    expect(store.reservations).toHaveLength(0)
+    expect(store.studentReservations).toHaveLength(0)
   })
 
   it('isola consultas e duplicidade por aluno, sem perder a reserva ao voltar à conta', async () => {
@@ -112,7 +113,7 @@ describe('Store de reservas simuladas', () => {
 
   it('começa sem reservas em uma nova instância de Pinia', () => {
     expect(useReservationsStore().confirm(request).status).toBe('confirmed')
-    expect(useReservationsStore(createPinia()).reservations).toHaveLength(0)
+    expect(useReservationsStore(createPinia()).studentReservations).toHaveLength(0)
   })
 
   it.each([
@@ -126,31 +127,31 @@ describe('Store de reservas simuladas', () => {
     const store = useReservationsStore()
     vi.setSystemTime(new Date('2026-11-13T20:00:00Z'))
     expect(store.confirm(request).status).toBe('confirmed')
-    const original = store.reservations[0]!
+    const original = store.studentReservations[0]!
     vi.setSystemTime(new Date(instant))
     expect(store.cancel(original.id)).toBe(status)
-    expect(store.reservations).toHaveLength(1)
+    expect(store.studentReservations).toHaveLength(1)
     if (status === 'cancelled') {
-      expect(store.reservations[0]).toEqual({ ...original, status: 'cancelled', cancelledAt: instant })
+      expect(store.studentReservations[0]).toEqual({ ...original, status: 'cancelled', cancelledAt: instant })
       expect(store.findConfirmed(request.travelDate)).toBeUndefined()
     } else {
-      expect(store.reservations[0]).toBe(original)
+      expect(store.studentReservations[0]).toBe(original)
     }
   })
 
   it('rejeita outro aluno, sessão ausente e cancelamento repetido, sem apagar o registro', async () => {
     const store = useReservationsStore()
     expect(store.confirm(request).status).toBe('confirmed')
-    const id = store.reservations[0]!.id
+    const id = store.studentReservations[0]!.id
     useSessionStore().user = { id: 'outro-aluno', name: 'Outro aluno', role: 'student' }
     expect(store.cancel(id)).toBe('not-found')
     useSessionStore().user = null
     expect(store.cancel(id)).toBe('not-found')
     await setMockSession('student')
     expect(store.cancel(id)).toBe('cancelled')
-    const cancelled = store.reservations[0]
+    const cancelled = store.studentReservations[0]
     expect(store.cancel(id)).toBe('already-cancelled')
-    expect(store.reservations[0]).toBe(cancelled)
+    expect(store.studentReservations[0]).toBe(cancelled)
     expect(store.confirm(request).status).toBe('duplicate')
   })
 
@@ -158,7 +159,7 @@ describe('Store de reservas simuladas', () => {
     const store = useReservationsStore()
     vi.setSystemTime(new Date('2026-11-13T20:00:00Z'))
     expect(store.confirm(request).status).toBe('confirmed')
-    const id = store.reservations[0]!.id
+    const id = store.studentReservations[0]!.id
     expect(store.getHomeSummary('2026-11-13').futureReservation?.id).toBe(id)
     expect(store.cancel(id)).toBe('cancelled')
     expect(store.getHomeSummary('2026-11-13').futureReservation).toBeNull()

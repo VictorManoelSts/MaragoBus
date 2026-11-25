@@ -47,7 +47,7 @@ describe('Página inicial do aluno', () => {
     expect(wrapper.find('time').exists()).toBe(false)
     expect(wrapper.find('[role="status"]').exists()).toBe(false)
     expect(wrapper.text()).not.toMatch(/reservas (abertas|fechadas)/i)
-    expect(useReservationsStore().reservations).toHaveLength(0)
+    expect(useReservationsStore().studentReservations).toHaveLength(0)
   })
 
   it('exibe os dados essenciais da reserva atual e acesso aos detalhes', async () => {

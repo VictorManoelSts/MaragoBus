@@ -6,8 +6,8 @@ export const driverFeatures = [
     name: 'driver-reservations', path: '/motorista/reservas', label: 'Reservas',
     title: 'Reservas', icon: CalendarDays,
     action: 'Consultar reservas dos alunos',
-    availability: 'A consulta de reservas dos alunos ainda está em desenvolvimento.',
-    description: 'Consulte futuramente a quantidade de alunos com reservas confirmadas, a demanda por faculdade e ponto de embarque, a listagem e pesquisa de alunos e os detalhes dos passageiros.',
+    availability: 'Consulte as reservas confirmadas por data e filtre por aluno, faculdade ou ponto de embarque.',
+    description: 'Reservas confirmadas dos alunos.',
   },
   {
     name: 'driver-warning-requests', path: '/motorista/advertencias', label: 'Solicitações de advertência',
