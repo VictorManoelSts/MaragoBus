@@ -132,6 +132,10 @@ public class RegrasTemporaisReserva {
                 && LocalDateTime.now(clock).isBefore(limiteAlteracaoPontoEmbarque(dataUtilizacao, datasSemFuncionamento));
     }
 
+    public boolean atingiuFechamentoDoDia(LocalDateTime agora) {
+        return ehDiaTransporte(agora.toLocalDate()) && !agora.toLocalTime().isBefore(ENCERRAMENTO);
+    }
+
     private void validarDiaUtilizacao(LocalDate dataUtilizacao, Set<LocalDate> datasSemFuncionamento) {
         if (!ehDiaTransporte(dataUtilizacao)) {
             throw new RegraNegocioException("A data de utilização deve ser de segunda a sexta-feira.");

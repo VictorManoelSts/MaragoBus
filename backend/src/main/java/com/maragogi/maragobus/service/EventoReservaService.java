@@ -16,6 +16,7 @@ import jakarta.validation.constraints.NotNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
@@ -131,6 +132,19 @@ public class EventoReservaService {
         );
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public EventoReservaResponse registrarCancelamentoPorPontoInativo(Reserva reserva, LocalDateTime dataHoraEvento) {
+        return salvarEvento(
+                reserva,
+                TipoEventoReserva.CANCELAMENTO_POR_PONTO_INATIVO,
+                StatusReserva.CONFIRMADA,
+                StatusReserva.CANCELADA_POR_PONTO_INATIVO,
+                null,
+                "PONTO_EMBARQUE_INATIVO",
+                dataHoraEvento
+        );
+    }
+
     @Transactional(readOnly = true)
     public List<EventoReservaResponse> consultarPorReserva(
             @NotNull(message = "O solicitante é obrigatório.") UUID solicitanteId,
@@ -189,9 +203,10 @@ public class EventoReservaService {
                 .tipoEvento(tipoEvento)
                 .statusAnterior(statusAnterior)
                 .statusNovo(statusNovo)
-                .autorId(autor.getId())
-                .autorNomeSnapshot(autor.getNome())
-                .autorTipoSnapshot(autor.getTipoUsuario())
+                .autorId(autor == null ? null : autor.getId())
+                .autorNomeSnapshot(autor == null ? "SISTEMA" : autor.getNome())
+                .autorTipoSnapshot(autor == null ? null : autor.getTipoUsuario())
+                .origem(autor == null ? "SISTEMA" : "USUARIO")
                 .motivo(motivo)
                 .dataHoraEvento(dataHoraEvento)
                 .dataUtilizacaoSnapshot(reserva.getDataUtilizacao())
@@ -240,7 +255,8 @@ public class EventoReservaService {
                 e.getPontoEmbarqueNomeSnapshot(),
                 e.getFaculdadeIdSnapshot(),
                 e.getFaculdadeNomeSnapshot(),
-                e.getCursoNomeSnapshot()
+                e.getCursoNomeSnapshot(),
+                e.getOrigem() == null ? "USUARIO" : e.getOrigem()
         );
     }
 }

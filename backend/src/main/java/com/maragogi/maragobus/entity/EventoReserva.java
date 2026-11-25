@@ -48,15 +48,18 @@ public class EventoReserva {
     @Column(name = "status_novo", nullable = false, updatable = false, length = 30)
     private StatusReserva statusNovo;
 
-    @Column(name = "autor_id", nullable = false, updatable = false)
+    @Column(name = "autor_id", updatable = false)
     private UUID autorId;
 
     @Column(name = "autor_nome_snapshot", nullable = false, updatable = false, length = 150)
     private String autorNomeSnapshot;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "autor_tipo_snapshot", nullable = false, updatable = false, length = 30)
+    @Column(name = "autor_tipo_snapshot", updatable = false, length = 30)
     private TipoUsuario autorTipoSnapshot;
+
+    @Column(name = "origem", updatable = false, length = 10)
+    private String origem;
 
     @Column(name = "motivo", updatable = false, length = 500)
     private String motivo;

@@ -220,6 +220,26 @@ public class ReservaService {
         return mapearResposta(reserva);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void cancelarPorPontoInativo(UUID alunoId, UUID reservaId) {
+        // Mesma ordem da alteração de ponto: aluno antes da reserva.
+        if (usuarioRepository.findByIdParaCriarReserva(alunoId).isEmpty()) {
+            return;
+        }
+        var reserva = reservaRepository.findLockedById(reservaId).orElse(null);
+        LocalDateTime agora = LocalDateTime.now(clock);
+        if (reserva == null || !reserva.getAluno().getId().equals(alunoId)
+                || reserva.getStatusReserva() != StatusReserva.CONFIRMADA
+                || !reserva.getDataUtilizacao().equals(agora.toLocalDate())
+                || !regrasTemporais.atingiuFechamentoDoDia(agora)
+                || reserva.getPontoEmbarque().isAtivo()) {
+            return;
+        }
+        reserva.setStatusReserva(StatusReserva.CANCELADA_POR_PONTO_INATIVO);
+        reserva.setDataHoraCancelamento(agora);
+        eventoReservaService.registrarCancelamentoPorPontoInativo(reserva, agora);
+    }
+
     @Transactional(readOnly = true)
     public PainelReservasAlunoResponse consultarPainel(@NotNull UUID alunoId) {
         var aluno = usuarioRepository.findById(alunoId)

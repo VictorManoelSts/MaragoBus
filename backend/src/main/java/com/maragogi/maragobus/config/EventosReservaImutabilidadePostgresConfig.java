@@ -18,21 +18,41 @@ public class EventosReservaImutabilidadePostgresConfig {
                 if (banco != null && banco.toLowerCase().contains("postgresql")) {
                     jdbc.execute("""
                             do $$
+                            declare
+                                coluna text;
                             begin
                                 if exists (
                                     select 1 from pg_constraint
                                     where conrelid = 'eventos_reserva'::regclass
                                       and conname = 'eventos_reserva_tipo_evento_check'
-                                      and pg_get_constraintdef(oid) not like '%CANCELAMENTO_SEM_FUNCIONAMENTO%'
+                                      and pg_get_constraintdef(oid) not like '%CANCELAMENTO_POR_PONTO_INATIVO%'
                                 ) then
                                     alter table eventos_reserva
                                         drop constraint eventos_reserva_tipo_evento_check,
                                         add constraint eventos_reserva_tipo_evento_check check (
                                             tipo_evento in ('CRIACAO', 'ALTERACAO_PONTO_EMBARQUE',
                                                 'CANCELAMENTO_PELO_ALUNO', 'CANCELAMENTO_POR_SUSPENSAO',
-                                                'CANCELAMENTO_SEM_FUNCIONAMENTO')
+                                                'CANCELAMENTO_SEM_FUNCIONAMENTO', 'CANCELAMENTO_POR_PONTO_INATIVO')
                                         );
                                 end if;
+                                foreach coluna in array array['status_anterior', 'status_novo'] loop
+                                    if exists (
+                                        select 1 from pg_constraint
+                                        where conrelid = 'eventos_reserva'::regclass
+                                          and conname = 'eventos_reserva_' || coluna || '_check'
+                                          and pg_get_constraintdef(oid) not like '%CANCELADA_POR_PONTO_INATIVO%'
+                                    ) then
+                                        execute format(
+                                            'alter table eventos_reserva drop constraint %1$I,
+                                             add constraint %1$I check (%2$I in (
+                                                 ''CONFIRMADA'', ''CANCELADA_PELO_ALUNO'', ''CANCELADA_POR_SUSPENSAO'',
+                                                 ''CANCELADA_SEM_FUNCIONAMENTO'', ''CANCELADA_POR_PONTO_INATIVO''))',
+                                            'eventos_reserva_' || coluna || '_check', coluna);
+                                    end if;
+                                end loop;
+                                alter table eventos_reserva
+                                    alter column autor_id drop not null,
+                                    alter column autor_tipo_snapshot drop not null;
                             end $$;
                             """);
                     jdbc.execute("""

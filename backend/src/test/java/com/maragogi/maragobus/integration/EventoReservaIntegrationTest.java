@@ -6,12 +6,17 @@ import com.maragogi.maragobus.enums.ModalidadeEnsino;
 import com.maragogi.maragobus.enums.StatusReserva;
 import com.maragogi.maragobus.enums.TipoEventoReserva;
 import com.maragogi.maragobus.enums.TipoUsuario;
+import com.maragogi.maragobus.exception.RegraNegocioException;
 import com.maragogi.maragobus.repository.*;
 import com.maragogi.maragobus.service.EventoReservaService;
+import com.maragogi.maragobus.service.FechamentoReservasPontoInativo;
+import com.maragogi.maragobus.service.PontoEmbarqueService;
 import com.maragogi.maragobus.service.ReservaService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -19,6 +24,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataAccessException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -30,6 +36,9 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import javax.sql.DataSource;
 import java.time.*;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -49,30 +58,33 @@ class EventoReservaIntegrationTest {
     }
 
     static class RelogioControlado extends Clock {
-        private final AtomicReference<Instant> instante;
+        private static final ZoneId MACEIO = ZoneId.of("America/Maceio");
+        private final AtomicReference<Clock> fixo;
         private final ZoneId zona;
 
         RelogioControlado() {
-            this(new AtomicReference<>(LocalDateTime.of(2026, 10, 14, 9, 0)
-                    .atZone(ZoneId.of("America/Maceio")).toInstant()), ZoneOffset.UTC);
+            this(new AtomicReference<>(), MACEIO);
+            definir("2026-10-14T09:00:00");
         }
 
-        private RelogioControlado(AtomicReference<Instant> instante, ZoneId zona) {
-            this.instante = instante;
+        private RelogioControlado(AtomicReference<Clock> fixo, ZoneId zona) {
+            this.fixo = fixo;
             this.zona = zona;
         }
 
         void definir(String local) {
-            instante.set(LocalDateTime.parse(local).atZone(ZoneId.of("America/Maceio")).toInstant());
+            fixo.set(Clock.fixed(LocalDateTime.parse(local).atZone(MACEIO).toInstant(), MACEIO));
         }
 
         @Override public ZoneId getZone() { return zona; }
-        @Override public Clock withZone(ZoneId zone) { return new RelogioControlado(instante, zone); }
-        @Override public Instant instant() { return instante.get(); }
+        @Override public Clock withZone(ZoneId zone) { return new RelogioControlado(fixo, zone); }
+        @Override public Instant instant() { return fixo.get().instant(); }
     }
 
     @Autowired RelogioControlado relogio;
     @Autowired ReservaService reservaService;
+    @Autowired PontoEmbarqueService pontoEmbarqueService;
+    @Autowired FechamentoReservasPontoInativo fechamento;
     @Autowired EventoReservaService eventoReservaService;
     @Autowired EventoReservaRepository eventosReserva;
     @Autowired LeituraAvisoAlunoRepository leituras;
@@ -163,6 +175,167 @@ class EventoReservaIntegrationTest {
         pontos.deleteAllInBatch();
         cursos.deleteAllInBatch();
         faculdades.deleteAllInBatch();
+    }
+
+    @Test
+    void deveCancelarUmaVezComHistoricoImutavelEExcluirDasConsultasOperacionais() {
+        UUID id = criarReservaComPontoInativo();
+        relogio.definir("2026-10-14T10:59:59");
+        fechamento.executar();
+        assertEquals(StatusReserva.CONFIRMADA, reservas.findById(id).orElseThrow().getStatusReserva());
+
+        relogio.definir("2026-10-14T11:00:00");
+        assertThrows(RegraNegocioException.class, () -> alterarPonto(id));
+        fechamento.executar();
+        relogio.definir("2026-10-14T11:01:00");
+        fechamento.executar();
+
+        var data = LocalDate.of(2026, 10, 14);
+        var horario = data.atTime(11, 0);
+        var cancelada = reservas.findById(id).orElseThrow();
+        assertEquals(StatusReserva.CANCELADA_POR_PONTO_INATIVO, cancelada.getStatusReserva());
+        assertEquals(horario, cancelada.getDataHoraCancelamento());
+        assertNull(reservaService.consultarPainel(alunoId).reservaAtual());
+        assertEquals(id, reservaService.consultarHistorico(alunoId, 0, 10).getContent().getFirst().id());
+        assertTrue(reservas.resumirPorFaculdadeEPonto(data, StatusReserva.CONFIRMADA).isEmpty());
+        assertEquals(0, reservas.consultarPassageirosConfirmados(
+                data, StatusReserva.CONFIRMADA, null, null, PageRequest.of(0, 10)).getTotalElements());
+
+        var eventos = eventoReservaService.consultarPorReserva(alunoId, id);
+        assertEquals(2, eventos.size());
+        var evento = eventos.getLast();
+        assertAll(
+                () -> assertEquals(TipoEventoReserva.CANCELAMENTO_POR_PONTO_INATIVO, evento.tipoEvento()),
+                () -> assertEquals(StatusReserva.CONFIRMADA, evento.statusAnterior()),
+                () -> assertEquals(cancelada.getStatusReserva(), evento.statusNovo()),
+                () -> assertEquals("PONTO_EMBARQUE_INATIVO", evento.motivo()),
+                () -> assertEquals("SISTEMA", evento.origem()),
+                () -> assertNull(evento.autorId()),
+                () -> assertNull(evento.autorTipo()),
+                () -> assertEquals(alunoId, evento.alunoId()),
+                () -> assertEquals(horario, evento.dataHoraEvento()),
+                () -> assertEquals(data, evento.dataUtilizacao()),
+                () -> assertEquals(pontoInicialId, evento.pontoEmbarqueId()),
+                () -> assertEquals(cancelada.getPontoEmbarqueNomeSnapshot(), evento.pontoEmbarqueNome()),
+                () -> assertEquals(faculdadeId, evento.faculdadeId()),
+                () -> assertEquals("Faculdade Original", evento.faculdadeNome()),
+                () -> assertEquals("Direito", evento.cursoNome()));
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "update eventos_reserva set origem = 'USUARIO' where id = ?", evento.id()));
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "delete from eventos_reserva where id = ?", evento.id()));
+        assertEquals(eventos, eventoReservaService.consultarPorReserva(alunoId, id));
+    }
+
+    @Test
+    void devePreservarReservaJaCanceladaPeloAluno() {
+        UUID id = criarReservaComPontoInativo();
+        var original = reservaService.cancelar(alunoId, id);
+        relogio.definir("2026-10-14T11:00:00");
+        fechamento.executar();
+        reservaService.cancelarPorPontoInativo(alunoId, id);
+        var persistida = reservas.findById(id).orElseThrow();
+        assertEquals(original.statusReserva(), persistida.getStatusReserva());
+        assertEquals(original.dataHoraCancelamento(), persistida.getDataHoraCancelamento());
+        assertEquals(2, eventoReservaService.consultarPorReserva(alunoId, id).size());
+    }
+
+    @Test
+    void deveReverterCancelamentoQuandoPostgresRejeitaEventoEPermitirNovaTentativa() {
+        UUID id = criarReservaComPontoInativo();
+        relogio.definir("2026-10-14T11:00:00");
+        jdbc.execute("""
+                alter table eventos_reserva add constraint teste_rejeitar_evento
+                check (tipo_evento <> 'CANCELAMENTO_POR_PONTO_INATIVO')
+                """);
+        try {
+            assertThrows(DataAccessException.class, () -> reservaService.cancelarPorPontoInativo(alunoId, id));
+            var persistida = reservas.findById(id).orElseThrow();
+            assertEquals(StatusReserva.CONFIRMADA, persistida.getStatusReserva());
+            assertNull(persistida.getDataHoraCancelamento());
+            assertEquals(1, eventoReservaService.consultarPorReserva(alunoId, id).size());
+        } finally {
+            jdbc.execute("alter table eventos_reserva drop constraint teste_rejeitar_evento");
+        }
+        fechamento.executar();
+        assertEquals(StatusReserva.CANCELADA_POR_PONTO_INATIVO, reservas.findById(id).orElseThrow().getStatusReserva());
+        assertEquals(2, eventoReservaService.consultarPorReserva(alunoId, id).size());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void deveSerializarAlteracaoEFechamentoNasDuasOrdens(boolean alteracaoPrimeiro) throws Exception {
+        UUID id = criarReservaComPontoInativo();
+        relogio.definir(alteracaoPrimeiro ? "2026-10-14T10:59:59" : "2026-10-14T11:00:00");
+        var primeiraAplicada = new CountDownLatch(1);
+        var liberarCommit = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var primeira = executor.submit(() -> transacao.executeWithoutResult(status -> {
+                if (alteracaoPrimeiro) {
+                    alterarPonto(id);
+                } else {
+                    reservaService.cancelarPorPontoInativo(alunoId, id);
+                }
+                primeiraAplicada.countDown();
+                try {
+                    assertTrue(liberarCommit.await(15, TimeUnit.SECONDS));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(e);
+                }
+            }));
+            try {
+                assertTrue(primeiraAplicada.await(15, TimeUnit.SECONDS));
+                relogio.definir("2026-10-14T11:00:00");
+                var segunda = executor.submit(() -> {
+                    if (alteracaoPrimeiro) {
+                        fechamento.executar();
+                    } else {
+                        assertThrows(RegraNegocioException.class, () -> alterarPonto(id));
+                    }
+                });
+                aguardarLockDoAluno();
+                liberarCommit.countDown();
+                primeira.get(15, TimeUnit.SECONDS);
+                segunda.get(15, TimeUnit.SECONDS);
+            } finally {
+                liberarCommit.countDown();
+            }
+        }
+
+        var persistida = reservas.findById(id).orElseThrow();
+        assertEquals(alteracaoPrimeiro ? StatusReserva.CONFIRMADA : StatusReserva.CANCELADA_POR_PONTO_INATIVO,
+                persistida.getStatusReserva());
+        var eventos = eventoReservaService.consultarPorReserva(alunoId, id);
+        assertEquals(2, eventos.size());
+        assertEquals(alteracaoPrimeiro ? pontoAlternativoId : pontoInicialId, eventos.getLast().pontoEmbarqueId());
+        assertEquals(alteracaoPrimeiro ? TipoEventoReserva.ALTERACAO_PONTO_EMBARQUE
+                : TipoEventoReserva.CANCELAMENTO_POR_PONTO_INATIVO, eventos.getLast().tipoEvento());
+    }
+
+    private void aguardarLockDoAluno() throws InterruptedException {
+        long limite = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < limite) {
+            if (Boolean.TRUE.equals(jdbc.queryForObject("""
+                    select exists(select 1 from pg_stat_activity
+                    where datname = current_database() and pid <> pg_backend_pid()
+                    and wait_event_type = 'Lock' and query like '%usuarios%')
+                    """, Boolean.class))) {
+                return;
+            }
+            Thread.sleep(25);
+        }
+        fail("A segunda operação deve aguardar o lock do aluno.");
+    }
+
+    private UUID criarReservaComPontoInativo() {
+        var reserva = reservaService.reservarProximaDataDisponivel(alunoId);
+        pontoEmbarqueService.desativar(pontoInicialId);
+        return reserva.id();
+    }
+
+    private void alterarPonto(UUID id) {
+        reservaService.alterarPontoEmbarque(alunoId, id, new AtualizacaoPontoEmbarqueReservaRequest(pontoAlternativoId));
     }
 
     @Test

@@ -25,5 +25,6 @@ public record EventoReservaResponse(
         String pontoEmbarqueNome,
         UUID faculdadeId,
         String faculdadeNome,
-        String cursoNome
+        String cursoNome,
+        String origem
 ) {}

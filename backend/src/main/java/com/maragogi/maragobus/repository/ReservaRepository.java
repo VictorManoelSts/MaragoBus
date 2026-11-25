@@ -86,6 +86,19 @@ public interface ReservaRepository extends JpaRepository<Reserva, UUID> {
 
     List<Reserva> findByAlunoIdOrderByDataUtilizacaoDesc(UUID alunoId);
 
+    interface CandidataFechamento {
+        UUID getReservaId();
+        UUID getAlunoId();
+    }
+
+    @Query("""
+            select r.id as reservaId, r.aluno.id as alunoId
+            from Reserva r
+            where r.dataUtilizacao = :data and r.statusReserva = :status and r.pontoEmbarque.ativo = false
+            """)
+    List<CandidataFechamento> buscarParaFechamentoPorPontoInativo(
+            @Param("data") LocalDate data, @Param("status") StatusReserva status);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Reserva> findLockedById(UUID id);
 
