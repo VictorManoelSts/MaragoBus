@@ -47,6 +47,28 @@ describe('BaseModal', () => {
     expect(document.activeElement).toBe(opener.element)
     expect(document.body.style.overflow).toBe('scroll')
   })
+  it.each(['removido', 'desabilitado'])('usa o fallback quando o acionador foi %s', async (condition) => {
+    const focusFallback = vi.fn(() => document.querySelector<HTMLElement>('#fallback'))
+    const wrapper = mount(defineComponent({
+      components: { BaseModal },
+      setup() { return { open: ref(false), finished: ref(false), condition, focusFallback } },
+      template: `<div>
+        <h1 id="fallback" tabindex="-1">Resultado</h1>
+        <button id="opener" v-if="!finished || condition !== 'removido'" :disabled="finished" @click="open = true">Abrir</button>
+        <BaseModal v-model="open" title="Confirmação" :focus-fallback="focusFallback">
+          <button id="finish" @click="finished = true; open = false">Concluir</button>
+        </BaseModal>
+      </div>`,
+    }), { attachTo: document.body })
+    const opener = wrapper.get<HTMLButtonElement>('#opener')
+    opener.element.focus()
+    await opener.trigger('click')
+    getDialog().querySelector<HTMLButtonElement>('#finish')!.click()
+    await nextTick()
+    expect(getDialog().open).toBe(false)
+    expect(document.activeElement).toBe(wrapper.get('#fallback').element)
+    expect(focusFallback).toHaveBeenCalledOnce()
+  })
   it('Escape solicita fechamento controlado e o pai atualiza v-model', async () => {
     const wrapper = host()
     await wrapper.get('#opener').trigger('click')

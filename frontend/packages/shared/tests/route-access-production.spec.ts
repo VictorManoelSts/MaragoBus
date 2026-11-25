@@ -22,7 +22,7 @@ it.each(['student', 'driver', 'admin'])('não aceita cookie mock de %s nas rotas
   const admin = createAdminRouter(createMemoryHistory(), pinia)
   expect(portal.hasRoute('design-system')).toBe(false)
   expect(admin.hasRoute('design-system')).toBe(false)
-  for (const path of ['/', '/reservas', '/motorista/reservas', '/design-system']) {
+  for (const path of ['/', '/reservas', '/motorista', '/motorista/reservas', '/design-system']) {
     await portal.push(path)
     expect(portal.currentRoute.value.name).toBe('login')
     expect(useSessionStore(pinia).authenticated).toBe(false)

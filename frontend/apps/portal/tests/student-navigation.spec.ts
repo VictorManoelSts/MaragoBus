@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory } from 'vue-router'
 import { BaseCard } from '@maragobus/shared'
@@ -43,7 +43,7 @@ describe.each(variants)('Navegação do aluno: %s', variant => {
     expect(wrapper.element.tagName).toBe('NAV')
     expect(wrapper.attributes('aria-label')).toBe('Navegação do aluno')
     expect(wrapper.findAll('li')).toHaveLength(5)
-    expect(wrapper.findAll('a').map(link => ({ path: link.attributes('href'), label: link.text() })))
+    expect(wrapper.findAll('a').map(link => ({ path: link.attributes('href'), label: link.get('.wrap-anywhere').text() })))
       .toEqual(destinations.map(({ path, label }) => ({ path, label })))
     expect(wrapper.findAll('svg')).toHaveLength(5)
     for (const link of wrapper.findAll('a')) {
@@ -74,7 +74,10 @@ describe.each(variants)('Navegação do aluno: %s', variant => {
 })
 
 describe('Integração das páginas do aluno', () => {
+  afterEach(() => vi.useRealTimers())
+
   it.each(destinations)('renderiza $path com o layout e título corretos', async ({ path, title }) => {
+    if (path === '/reservar') vi.setSystemTime(new Date('2026-11-16T13:59:00Z'))
     const { wrapper } = await application(path)
     expect(wrapper.findComponent(StudentLayout).exists()).toBe(true)
     expect(wrapper.findComponent(PortalLayout).exists()).toBe(true)
@@ -85,12 +88,16 @@ describe('Integração das páginas do aluno', () => {
     expect(wrapper.findAllComponents(StudentNavigation)).toHaveLength(2)
     const card = wrapper.findComponent(BaseCard)
     if (path === '/reservar') expect(card.text()).toContain('Resumo da seleção')
+    else if (path === '/reservas') expect(card.text()).toContain('Você ainda não tem reservas.')
+    else if (path === '/perfil') expect(card.text()).toContain('Dados do aluno')
+    else if (path === '/notificacoes') expect(card.text()).toContain('Exemplo de comunicado')
     else expect(card.text()).toBe(path === '/' ? 'Sua reserva atualVocê não tem uma reserva atual para apresentar.Fazer reserva'
       : 'Esta funcionalidade será implementada posteriormente.')
     expect(wrapper.get('main p').text().length).toBeGreaterThan(20)
-    expect(wrapper.get('main').findAll('input, select, form')).toHaveLength(path === '/reservar' ? 1 : 0)
-    expect(wrapper.get('main').findAll('button').map(button => button.text())).toEqual(
-      path === '/perfil' ? ['Sair'] : path === '/reservar' ? ['Confirmar reserva'] : [])
+    expect(wrapper.get('main').findAll('input, select, form')).toHaveLength(path === '/perfil' ? 2 : path === '/reservar' ? 1 : 0)
+    const buttons = wrapper.get('main').findAll('button').map(button => button.text())
+    if (path === '/notificacoes') expect(buttons).toContain('Marcar todas como lidas')
+    else expect(buttons).toEqual(path === '/perfil' ? ['Salvar ponto padrão', 'Sair'] : path === '/reservar' ? ['Confirmar reserva'] : [])
   })
 
   it('mantém Notificações exclusivamente para avisos administrativos enviados aos alunos', async () => {
@@ -98,7 +105,7 @@ describe('Integração das páginas do aluno', () => {
     expect(wrapper.get('main p').text()).toBe(
       'Espaço exclusivo para avisos administrativos enviados aos alunos.',
     )
-    expect(wrapper.findComponent(BaseCard).text()).toBe('Esta funcionalidade será implementada posteriormente.')
+    expect(wrapper.get('main').text()).toContain('Avisos de demonstração.')
   })
 
   it('alterna desktop e mobile pelo mesmo breakpoint, sem fixar a barra fora do fluxo', async () => {
@@ -138,6 +145,7 @@ describe('Integração das páginas do aluno', () => {
   })
 
   it('apresenta seleção demonstrativa em Fazer reserva sem criar registros', async () => {
+    vi.setSystemTime(new Date('2026-11-16T13:59:00Z'))
     const { wrapper } = await application('/reservar')
     expect(wrapper.findComponent(BaseCard).text()).toContain('Resumo da seleção')
     expect(wrapper.get('main').findAll('select')).toHaveLength(1)
@@ -146,24 +154,23 @@ describe('Integração das páginas do aluno', () => {
     expect(wrapper.findAll('h1')).toHaveLength(1)
   })
 
-  it('descreve as finalidades futuras de Minhas reservas sem implementar histórico ou detalhes', async () => {
+  it('oferece acesso a Fazer reserva no estado vazio de Minhas reservas', async () => {
     const { wrapper } = await application('/reservas')
-    expect(wrapper.get('main p').text()).toBe(
-      'Consulte futuramente sua reserva atual, reservas anteriores, histórico de cancelamentos, detalhes e comprovantes disponíveis.',
-    )
-    expect(wrapper.get('main').findAll('table, form, input, select, button, ul')).toHaveLength(0)
+    expect(wrapper.get('main p').text()).toContain('reservas de demonstração')
+    expect(wrapper.get('main a').attributes('href')).toBe('/reservar')
   })
 
-  it('preserva a descrição e o card do perfil, ajustando somente sua identificação', async () => {
+  it('exibe dados do aluno e preserva a saída no perfil', async () => {
     const { wrapper } = await application('/perfil')
     expect(wrapper.get('main h1').text()).toBe('Meu perfil')
-    expect(wrapper.get('main p').text()).toBe('Espaço para consultar as informações do seu perfil de aluno.')
-    expect(wrapper.findComponent(BaseCard).text()).toBe('Esta funcionalidade será implementada posteriormente.')
+    expect(wrapper.get('main p').text()).toContain('ponto de embarque padrão')
+    expect(wrapper.findComponent(BaseCard).text()).toContain('Aluno de Teste')
+    expect(wrapper.findAll('main button').some(button => button.text() === 'Sair')).toBe(true)
   })
 
   it('permite quebra dos novos rótulos no mobile sem truncá-los nem fixar sua largura', async () => {
     const { wrapper } = await navigation('mobile')
-    for (const label of wrapper.findAll('a span')) expect(label.classes()).toContain('wrap-anywhere')
+    for (const link of wrapper.findAll('a')) expect(link.get('span').classes()).toContain('wrap-anywhere')
     for (const item of wrapper.findAll('li')) expect(item.classes()).toContain('min-w-0')
     expect(wrapper.text()).toContain('Minhas reservas')
     expect(wrapper.text()).toContain('Fazer reserva')

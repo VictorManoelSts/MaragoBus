@@ -1,9 +1,8 @@
 import type { ReservationFormContext } from '../types/reservation-form'
 
-export function getMockReservationForm(): ReservationFormContext {
+export function getMockReservationForm(studentId?: string): ReservationFormContext {
   return {
-    travelDate: '2026-11-16',
-    college: null,
+    college: studentId === 'mock-student-test' ? 'Faculdade de Demonstração' : null,
     defaultBoardingPointId: null,
     boardingPoints: [
       { id: 'demo-center', name: 'Praça de exemplo — Centro' },

@@ -1,26 +1,97 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { BaseAlert, BaseButton, BaseCard, BaseSelect } from '@maragobus/shared'
-import { getMockReservationForm } from '../mocks/reservation-form'
+import { useTransportClock } from '../composables/useTransportClock'
+import { mockTransportClosures } from '../mocks/transport-closures'
+import { useReservationsStore } from '../stores/reservations'
+import { useStudentProfileStore } from '../stores/student-profile'
+import type { TransportClosure } from '../types/reservation-availability'
 import type { ReservationFormContext } from '../types/reservation-form'
+import { getReservationAvailability, getTransportDate, transportTimeZone } from '../utils/reservation-availability'
 
-const props = withDefaults(defineProps<{ context?: ReservationFormContext }>(), {
-  context: getMockReservationForm,
+const props = withDefaults(defineProps<{
+  context?: ReservationFormContext
+  closures?: readonly TransportClosure[]
+}>(), {
+  closures: () => mockTransportClosures,
 })
-// Apenas uma escolha local. Não grava perfil, sessão ou reservas.
-const selectedPointId = ref(props.context.boardingPoints.some(point =>
-  point.id === props.context.defaultBoardingPointId) ? props.context.defaultBoardingPointId! : '')
-const options = computed(() => props.context.boardingPoints.map(point => ({ value: point.id, label: point.name })))
-const selectedPoint = computed(() => props.context.boardingPoints.find(point => point.id === selectedPointId.value))
-const formattedDate = computed(() => {
-  // A data é civil; UTC evita deslocamento ao dia anterior no fuso local.
-  const date = new Date(`${props.context.travelDate}T00:00:00Z`)
-  const label = new Intl.DateTimeFormat('pt-BR', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
-  }).format(date)
+
+const reservations = useReservationsStore()
+const profile = useStudentProfileStore()
+const context = computed(() => props.context ?? profile.reservationContext)
+const { reference, refresh } = useTransportClock()
+const availability = computed(() => getReservationAvailability(reference.value, props.closures))
+const openWindow = computed(() => availability.value.status === 'open' ? availability.value.window : null)
+const nextWindow = computed(() => availability.value.status === 'open' ? null : availability.value.nextWindow)
+const closure = computed(() => availability.value.status === 'no-service' ? availability.value.closure : null)
+function defaultPointId() {
+  const { boardingPoints, defaultBoardingPointId } = context.value
+  return boardingPoints.find(point => point.id === defaultBoardingPointId)?.id ?? ''
+}
+
+const pointOverride = ref<string | null>(null)
+const selectedPointId = computed({
+  get: () => pointOverride.value ?? defaultPointId(),
+  set: pointId => { pointOverride.value = pointId },
+})
+const targetDate = computed(() => openWindow.value?.travelDate ?? nextWindow.value?.travelDate)
+const lastConfirmedId = ref<string | null>(null)
+const availabilityChanged = ref(false)
+watch(targetDate, () => { pointOverride.value = null })
+watch(() => reservations.studentId, () => {
+  pointOverride.value = null
+  lastConfirmedId.value = null
+  availabilityChanged.value = false
+})
+const options = computed(() => context.value.boardingPoints.map(point => ({ value: point.id, label: point.name })))
+const selectedPoint = computed(() => context.value.boardingPoints.find(point => point.id === selectedPointId.value))
+const confirmationRequest = computed(() => ({
+  travelDate: openWindow.value?.travelDate ?? null,
+  context: context.value,
+  boardingPointId: selectedPointId.value,
+  closures: props.closures,
+}))
+const eligibility = computed(() => reservations.validateConfirmation(confirmationRequest.value, availability.value).status)
+const existingReservation = computed(() => {
+  const date = openWindow.value?.travelDate ?? getTransportDate(reference.value)
+  return reservations.findReservation(date)
+})
+const confirmationHelp = computed(() => {
+  if (existingReservation.value?.status === 'cancelled') return 'Há uma reserva cancelada registrada para esta data.'
+  if (existingReservation.value) return 'Você já tem uma reserva para esta data.'
+  switch (eligibility.value) {
+    case 'student-required': return 'Entre com uma conta de aluno para confirmar.'
+    case 'unavailable': return 'Aguarde uma janela aberta para confirmar.'
+    case 'college-required': return 'A confirmação exige uma faculdade cadastrada no modelo de demonstração do aluno.'
+    case 'point-required': return 'Selecione um ponto de embarque para confirmar.'
+    default: return 'Confira os dados da viagem antes de confirmar.'
+  }
+})
+
+function confirmReservation() {
+  // Preserve the date the student reviewed, even when the clock has already crossed a boundary.
+  const result = reservations.confirm(confirmationRequest.value)
+  availabilityChanged.value = result.status === 'unavailable'
+  if (result.status === 'confirmed') {
+    lastConfirmedId.value = result.reservation.id
+  }
+  refresh()
+}
+
+const civilDateFormat = new Intl.DateTimeFormat('pt-BR', {
+  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+})
+const transportDateTimeFormat = new Intl.DateTimeFormat('pt-BR', {
+  dateStyle: 'short', timeStyle: 'short', timeZone: transportTimeZone,
+})
+const transportHourFormat = new Intl.DateTimeFormat('pt-BR', {
+  timeStyle: 'short', timeZone: transportTimeZone,
+})
+function formatDate(date: string) {
+  const label = civilDateFormat.format(new Date(`${date}T00:00:00Z`))
   return label.charAt(0).toUpperCase() + label.slice(1)
-})
-const collegeLabel = computed(() => props.context.college?.trim() || 'Faculdade não informada neste modelo de demonstração.')
+}
+const collegeLabel = computed(() => context.value.college?.trim() || 'Faculdade não informada neste modelo de demonstração.')
 </script>
 
 <template>
@@ -31,16 +102,62 @@ const collegeLabel = computed(() => props.context.college?.trim() || 'Faculdade 
     </div>
 
     <BaseAlert variant="info">
-      Dados de demonstração: a data e os pontos de embarque são exemplos de desenvolvimento.
-      Não representam disponibilidade de viagem nem pontos reais cadastrados no sistema.
+      Os pontos de embarque são dados de demonstração. As reservas simuladas ficam disponíveis até recarregar a aplicação.
     </BaseAlert>
 
     <BaseCard>
-      <div class="space-y-6">
+      <BaseAlert
+        :variant="openWindow ? 'success' : closure ? 'warning' : 'info'"
+        :title="openWindow ? 'Reservas abertas' : 'Reservas fechadas'"
+      >
+        <template v-if="openWindow">
+          <p>Encerramento às <time :datetime="openWindow.closesAt.toISOString()">{{ transportHourFormat.format(openWindow.closesAt) }}</time> do dia da viagem (horário de Alagoas).</p>
+        </template>
+        <template v-else-if="nextWindow">
+          <template v-if="closure">
+            <p>Não haverá transporte em <time :datetime="closure.date">{{ formatDate(closure.date) }}</time>.</p>
+            <p v-if="closure.reason">{{ closure.reason }}</p>
+            <p v-if="closure.description">{{ closure.description }}</p>
+            <p>Não é possível reservar para essa data.</p>
+          </template>
+          <p>Próxima abertura conhecida em <time :datetime="nextWindow.opensAt.toISOString()">{{ transportDateTimeFormat.format(nextWindow.opensAt) }}</time> (horário de Alagoas).</p>
+          <p>Viagem em <time :datetime="nextWindow.travelDate">{{ formatDate(nextWindow.travelDate) }}</time>.</p>
+        </template>
+      </BaseAlert>
+
+      <BaseAlert v-if="availabilityChanged" variant="warning" class="mt-6">
+        A disponibilidade mudou. Confira a data da viagem antes de tentar confirmar novamente.
+      </BaseAlert>
+
+      <BaseAlert
+        v-if="existingReservation"
+        :variant="existingReservation.status === 'cancelled' ? 'warning' : 'success'"
+        :title="existingReservation.status === 'cancelled' ? 'Reserva de demonstração cancelada'
+          : existingReservation.id === lastConfirmedId
+          ? 'Reserva de demonstração confirmada!' : 'Reserva de demonstração já confirmada'"
+        class="mt-6"
+      >
+        <dl class="grid min-w-0 gap-4 text-helper sm:grid-cols-2">
+          <div>
+            <dt>Data da viagem</dt>
+            <dd><time :datetime="existingReservation.travelDate">{{ formatDate(existingReservation.travelDate) }}</time></dd>
+          </div>
+          <div>
+            <dt>Faculdade</dt>
+            <dd>{{ existingReservation.college }}</dd>
+          </div>
+          <div>
+            <dt>Ponto de embarque</dt>
+            <dd>{{ existingReservation.boardingPoint }}</dd>
+          </div>
+        </dl>
+      </BaseAlert>
+
+      <div v-else-if="openWindow" class="mt-6 space-y-6">
         <dl class="grid min-w-0 gap-5 sm:grid-cols-2">
           <div class="min-w-0 space-y-1">
-            <dt class="text-helper text-muted">Data da viagem (demonstração)</dt>
-            <dd class="text-body"><time :datetime="context.travelDate">{{ formattedDate }}</time></dd>
+            <dt class="text-helper text-muted">Data da viagem</dt>
+            <dd class="text-body"><time :datetime="openWindow.travelDate">{{ formatDate(openWindow.travelDate) }}</time></dd>
           </div>
           <div class="min-w-0 space-y-1">
             <dt class="text-helper text-muted">Faculdade de destino</dt>
@@ -62,7 +179,7 @@ const collegeLabel = computed(() => props.context.college?.trim() || 'Faculdade 
           <dl class="grid min-w-0 gap-4 text-helper sm:grid-cols-2">
             <div class="min-w-0 space-y-1">
               <dt class="text-muted">Data da viagem</dt>
-              <dd>{{ formattedDate }}</dd>
+              <dd>{{ formatDate(openWindow.travelDate) }}</dd>
             </div>
             <div class="min-w-0 space-y-1">
               <dt class="text-muted">Faculdade</dt>
@@ -77,9 +194,10 @@ const collegeLabel = computed(() => props.context.college?.trim() || 'Faculdade 
       </div>
       <template #footer>
         <div class="space-y-3">
-          <BaseButton disabled aria-describedby="reservation-confirmation-help" class="w-full sm:w-auto">Confirmar reserva</BaseButton>
+          <BaseButton :disabled="eligibility !== 'ready'" aria-describedby="reservation-confirmation-help"
+            class="w-full sm:w-auto" @click="confirmReservation">Confirmar reserva</BaseButton>
           <p id="reservation-confirmation-help" class="text-helper text-muted">
-            A confirmação de reservas ainda não está disponível. Nenhuma reserva será criada nesta demonstração.
+            {{ confirmationHelp }}
           </p>
         </div>
       </template>

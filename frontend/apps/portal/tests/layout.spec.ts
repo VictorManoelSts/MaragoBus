@@ -104,7 +104,7 @@ describe('PortalLayout', () => {
 describe('Largura do Portal nos dois perfis', () => {
   it.each([
     { path: '/reservas', count: 5 },
-    { path: '/motorista/reservas', count: 3 },
+    { path: '/motorista/reservas', count: 4 },
   ])('preserva sidebar e barra mobile em estrutura fluida para $path', async ({ path, count }) => {
     await setMockSession(path.startsWith('/motorista') ? 'driver' : 'student')
     const router = createPortalRouter(createMemoryHistory())

@@ -24,13 +24,14 @@ withDefaults(defineProps<{
       <li v-for="item in items" :key="item.name" class="min-w-0">
         <RouterLink
           :to="{ name: item.name }"
-          class="portal-navigation__link flex rounded-control"
+          class="portal-navigation__link relative flex rounded-control"
           :class="variant === 'desktop'
             ? 'items-center gap-3 px-3 py-3 text-label'
             : 'min-h-16 flex-col items-center justify-center gap-1 px-1 py-2 text-center text-xs sm:text-helper'"
         >
           <component :is="item.icon" :size="20" class="shrink-0" aria-hidden="true" />
           <span class="wrap-anywhere">{{ item.label }}</span>
+          <slot name="item-decoration" :item="item" />
         </RouterLink>
       </li>
     </ul>

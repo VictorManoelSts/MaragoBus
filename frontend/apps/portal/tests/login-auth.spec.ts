@@ -75,7 +75,7 @@ describe('Integração do login com autenticação de desenvolvimento', () => {
 
   it.each([
     { cpf: '90000000175', password: 'AlunoTeste!53', role: 'student', destination: '/' },
-    { cpf: '90000000256', password: 'MotoristaTeste!53', role: 'driver', destination: '/motorista/reservas' },
+    { cpf: '90000000256', password: 'MotoristaTeste!53', role: 'driver', destination: '/motorista' },
     { cpf: '90000000337', password: 'AdminTeste!53', role: 'admin', destination: 'http://localhost:5174/' },
   ])('autentica $role com CPF gerado para teste e navega ao destino correto', async credential => {
     expect(cpfError(credential.cpf)).toBe('')

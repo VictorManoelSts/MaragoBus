@@ -4,18 +4,32 @@ import { X } from '@lucide/vue'
 import BaseButton from './BaseButton.vue'
 import { lockModalScroll } from '../utils/modal-scroll'
 
-const props = defineProps<{ modelValue: boolean; title: string }>()
+const props = defineProps<{
+  modelValue: boolean
+  title: string
+  focusFallback?: () => HTMLElement | null | undefined
+}>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 const dialog = ref<HTMLDialogElement>()
 const titleId = 'mb-modal-title-' + useId()
 let previousFocus: HTMLElement | null = null
 let releaseScroll: (() => void) | undefined
+let unmounting = false
 
 function restore() {
-  releaseScroll?.()
+  if (!releaseScroll) return
+  releaseScroll()
   releaseScroll = undefined
-  if (previousFocus?.isConnected) previousFocus.focus()
+  const opener = previousFocus
   previousFocus = null
+  if (!tryFocus(opener) && !unmounting) tryFocus(props.focusFallback?.())
+}
+function tryFocus(element?: HTMLElement | null): boolean {
+  if (!element?.isConnected || element === document.body || element.matches(':disabled') || !visible(element)) {
+    return false
+  }
+  element.focus()
+  return document.activeElement === element
 }
 function sync() {
   const element = dialog.value
@@ -66,6 +80,7 @@ function trapTab(event: KeyboardEvent) {
 watch(() => props.modelValue, sync, { flush: 'post' })
 onMounted(sync)
 onBeforeUnmount(() => {
+  unmounting = true
   if (dialog.value?.open) dialog.value.close()
   restore()
 })

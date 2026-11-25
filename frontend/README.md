@@ -26,30 +26,16 @@ Essa ferramenta fica fora do repositório. Em outras máquinas basta instalar No
 
 ## Fluxo de desenvolvimento vigente
 
-As instruções completas estão em [AGENTS.md](AGENTS.md). Para as próximas etapas:
-
-1. Implementar uma ou poucas funcionalidades relacionadas por prompt, sem avançar além do escopo autorizado.
-2. Incluir testes automatizados relevantes para cada implementação.
-3. Executar TypeScript, testes e builds apropriados, registrando resultados reais.
-4. Criar o relatório Markdown da etapa em `docs/etapas/`.
-5. Não gerar capturas de tela.
-6. Não criar pastas de evidências visuais.
-7. Não executar inspeções visuais automatizadas sem solicitação explícita.
-8. Manter os servidores de desenvolvimento do Portal e do Admin em execução ao finalizar, quando possível.
-9. Reutilizar servidores existentes, verificando as portas e as respostas HTTP antes de iniciar processos; não duplicar instâncias nem trocar portas.
-10. Informar os endereços locais de visualização e eventuais limitações do ambiente.
-11. Não realizar commits ou pushes automaticamente.
-12. Aguardar autorização antes da próxima funcionalidade.
+O [AGENTS.md](AGENTS.md) reúne as regras de escopo, validação e delegação.
+A resposta final do Codex registra as mudanças, as verificações executadas e as pendências.
+Consulte [Autenticação do frontend](docs/autenticacao-frontend.md) ou
+[Reservas do aluno](docs/reservas.md) conforme o domínio afetado.
 
 Visualização manual: [Portal](http://localhost:5173/) e [Admin](http://localhost:5174/).
 Se algum estiver parado, use `npm.cmd run dev:portal` ou `npm.cmd run dev:admin` em terminais
 separados. Com ambos parados, `npm.cmd run dev` inicia os dois. Não execute esse último
 comando se uma das portas já estiver ocupada: inicie apenas a aplicação ausente.
 O ajuste de PATH para o Node portátil deste ambiente está documentado acima.
-
-As capturas históricas foram removidas na manutenção do fluxo. Os relatórios e suas
-verificações permanecem preservados; medições JSON e scripts antigos não foram removidos.
-Procedimentos de captura descritos nos relatórios antigos não integram o fluxo atual.
 
 ## Comandos
 
@@ -62,6 +48,7 @@ Procedimentos de captura descritos nos relatórios antigos não integram o fluxo
 | `npm run build:admin` | Checagem de tipos e build do Admin |
 | `npm run build` | Build completo, interrompido em caso de falha |
 | `npm run typecheck` | Checagem TypeScript de ambas as aplicações |
+| `npm test` | Testes automatizados com Vitest e Vue Test Utils |
 | `npm run branding:verify` | Comparação dos quatro SVGs com os hashes originais |
 
 As duas configurações usam `strictPort: true`: portas ocupadas geram erro.
@@ -83,7 +70,7 @@ apps/
       layouts/            # estrutura das páginas
       pages/              # páginas associadas às rotas
       router/             # Vue Router independente
-      stores/             # futuros stores Pinia por domínio
+      stores/             # stores Pinia por domínio quando necessárias
       services/           # futura integração REST
       main.ts             # bootstrap e instância própria de Pinia
       App.vue
@@ -91,7 +78,8 @@ apps/
 packages/shared/
   src/
     assets/branding/      # SVGs oficiais, intactos
-    components/           # BrandLogo
+    auth/                 # contratos, sessão e proteção de rotas
+    components/           # Design System e BrandLogo
     styles/               # tokens semânticos e paleta oficial compartilhada
     types/                # tipos compartilhados
     utils/                # espaço para funções compartilhadas
@@ -101,6 +89,27 @@ tsconfig.base.json        # opções TypeScript estritas comuns
 
 Diretórios ainda sem implementação são mantidos com `.gitkeep`, sem criar lógica artificial.
 As configurações Vite, os HTMLs de entrada e os arquivos TypeScript complementam a estrutura solicitada.
+
+## Layouts e navegação
+
+- O Portal usa `PortalLayout` como base dos layouts de aluno e motorista. Cabeçalho e área de conteúdo são fluidos. Preserve o espaço restante do `main` com `min-w-0` e limite a largura apenas onde fizer sentido, como em descrições com `max-w-prose`.
+- As duas navegações do Portal compartilham o mesmo breakpoint `lg` (1024 px). A sidebar aparece no desktop. A barra inferior mobile permanece no fluxo com `sticky`, cinco destinos para aluno e três para motorista. Cada conjunto deriva de sua configuração de rotas. Mantenha rótulos visíveis, foco e `aria-current="page"`.
+- O Admin usa `AdminShell` para compor `AdminLayout`, sidebar desktop e drawer mobile. Sidebar e drawer compartilham os grupos Principal e Gerenciamento complementar de `adminNavigationGroups`, que também fornece os itens do roteador.
+- O drawer usa diálogo nativo e rolagem interna, bloqueia a rolagem do fundo e contém Tab/Shift+Tab. Fecha pelo botão, Escape, backdrop, seleção ou mudança de rota e ao atingir o breakpoint desktop. O fechamento manual devolve o foco ao acionador quando presente. Após navegar, o foco segue para o `main`.
+- Preserve o atalho **Ir para o conteúdo principal**, o `main` focável e um título principal por página. Use links nativos do Vue Router para navegação.
+
+| Área | Destinos |
+| --- | --- |
+| Aluno | `/`, `/reservar`, `/reservas`, `/notificacoes`, `/perfil` |
+| Motorista | `/motorista`, `/motorista/reservas`, `/motorista/advertencias`, `/motorista/perfil` |
+| Admin | Principal: visão geral, alunos, motoristas, faculdades, pontos de embarque, solicitações de advertência e perfil. Complementar: cursos, cursos ofertados e reservas. |
+
+No Portal, `/historico` redireciona para `/reservas`, `/avisos` para
+`/notificacoes` e `/motorista/passageiros` e `/motorista/resumo`
+para `/motorista/reservas`. Os guards avaliam o destino final. Os redirecionamentos
+de compatibilidade autorizados preservam query e hash.
+
+O painel do motorista também dá acesso à página informativa `/motorista/faculdades`.
 
 ## Pacote compartilhado
 
@@ -148,7 +157,9 @@ O SVG emitido em ambos os builds também teve SHA-256 idêntico ao original.
 O PNG `logo-maragogi.png`, já existente, foi mantido na raiz.
 
 A interface utiliza a paleta oficial aprovada na Etapa 04.1, centralizada nos tokens semânticos.
-As páginas permanecem provisórias, sem tela de login ou funcionalidades de negócio.
+Consulte o [Design System](docs/etapas/02-design-system.md) e a
+[paleta oficial](docs/etapas/04.1-paleta-oficial.md) para componentes, tokens e contraste.
+O catálogo `/design-system` fica disponível no Portal e no Admin apenas em desenvolvimento.
 
 ## Integração REST futura
 
@@ -156,37 +167,13 @@ Cada aplicação tem sua própria pasta `services/`, `stores/` e `.env.example`.
 Quando a API estiver disponível, copie o exemplo para `.env.local` na respectiva aplicação
 e configure `VITE_API_BASE_URL`. A URL está disponível em `services/index.ts`.
 
-Ainda não existem chamadas de rede, autenticação, persistência ou contratos de domínio inventados.
-Tipos realmente comuns poderão ir para o shared; serviços e stores de cada aplicação
-devem continuar independentes. Variáveis `VITE_*` ficam públicas no bundle e não devem conter segredos.
+A sessão atual é simulada e as reservas ficam em memória. A
+[auditoria histórica de autenticação](docs/etapas/06.1-auditoria-autenticacao-backend.md)
+registra propostas ainda não implementadas. Serviços e instâncias Pinia de cada aplicação
+continuam independentes. Variáveis `VITE_*` ficam públicas no bundle e não devem conter segredos.
 
 No deploy, publique cada `dist/` separadamente. Como o router usa history HTML5,
 configure o servidor para retornar `index.html` nas rotas da aplicação.
 
-## Validação desta etapa
-
-- Builds de produção das duas aplicações, incluindo checagem estrita de tipos.
-- SHA-256 dos quatro SVGs após a movimentação e do logo emitido em ambos os builds.
-- Inicialização simultânea e HTTP 200 nas portas 5173/5174 para HTML, entradas, páginas, CSS e componente compartilhado.
-- Dependências instaladas sem vulnerabilidades reportadas pelo npm.
-
-
-## Etapa 02 — Design System
-
-- Relatório completo: [docs/etapas/02-design-system.md](docs/etapas/02-design-system.md).
-- Execute npm run dev e acesse /design-system no Portal (5173) ou Admin (5174).
-- O catálogo é registrado apenas em desenvolvimento e excluído do JavaScript de produção.
-- npm test executa 42 testes com Vitest e Vue Test Utils; npm run test:watch inicia o modo interativo.
-- npm run typecheck verifica também os testes e a configuração Vitest.
-- A fonte Inter é servida localmente. Os tokens ficam em packages/shared/src/styles/tokens.css; a paleta oficial foi aplicada na Etapa 04.1.
-- Validação visual em navegador permanece pendente; há quatro avisos moderados em dependências de teste. Veja detalhes no relatório.
-
-Cada etapa futura deve manter seu próprio relatório em docs/etapas/, com resultados reais de validação e pendências.
-
-## Etapa 04.1 — Paleta oficial
-
-Paleta centralizada em `packages/shared/src/styles/tokens.css`: azul-marinho `#16466B`,
-azul-oceano `#2479A8`, azul-água `#48A9C5`, azul névoa `#EAF4F8` e branco `#FFFFFF`.
-Os neutros e estados funcionais existentes foram preservados. Não há cores de marca adicionais.
-Relatório: [docs/etapas/04.1-paleta-oficial.md](docs/etapas/04.1-paleta-oficial.md).
-Visualização manual: http://localhost:5173/ e http://localhost:5174/.
+As [métricas históricas](docs/etapas/evidencias/) e os scripts de captura associados
+permanecem preservados. Os scripts de captura estão fora do fluxo de validação atual.

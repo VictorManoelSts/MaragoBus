@@ -1,36 +1,94 @@
-# Orientações do projeto MaragoBus
+# MaragoBus — Orientações do Codex
 
-## Fluxo de desenvolvimento vigente
-1. Cada prompt deve implementar uma ou poucas funcionalidades relacionadas; respeitar o escopo solicitado.
-2. Cada implementação deve incluir testes automatizados relevantes, reutilizando a suíte existente quando apropriado.
-3. Executar TypeScript, testes e builds apropriados; informar os comandos e resultados reais.
-4. Gerar um relatório Markdown próprio em `docs/etapas/`, inclusive nas tarefas de manutenção.
-5. Não gerar capturas de tela.
-6. Não criar pastas de evidências visuais.
-7. Não executar inspeções visuais automatizadas, salvo solicitação explícita do usuário.
-8. Ao finalizar, manter os servidores de desenvolvimento do Portal e do Admin em execução, sempre que o ambiente permitir.
-9. Reutilizar os servidores existentes. Antes de iniciar qualquer processo, verificar as portas 5173/5174 e as respostas locais. Não duplicar instâncias nem alterar as portas.
-10. Informar as URLs de visualização: Portal em http://localhost:5173/ e Admin em http://localhost:5174/. Explicar qualquer limitação e fornecer o comando exato se algum servidor não puder permanecer ativo.
-11. Não realizar commits ou pushes automaticamente.
-12. Não avançar para a próxima funcionalidade sem autorização.
+## Project overview
 
-Essas regras substituem os procedimentos de capturas descritos nos relatórios históricos.
-Resultados antigos de inspeções devem ser preservados como histórico, sem recriar imagens.
-Os `metrics.json` e scripts históricos foram mantidos por não serem capturas; os scripts
-de captura não integram o fluxo atual e não devem ser executados automaticamente.
+O MaragoBus organiza o transporte universitário. O frontend usa Vue 3, TypeScript,
+Vite, Pinia, Vue Router e Tailwind CSS 4 em um monorepo com npm workspaces.
 
-## Relatórios por etapa
-Toda etapa deve criar seu relatório próprio em `docs/etapas/NN-nome-da-etapa.md`.
-Incluir: resumo, principais arquivos e responsabilidades, componentes ou funcionalidades,
-decisões técnicas, comandos de validação com resultados realmente executados, pendências
-e próxima etapa prevista. Apresentar também um resumo objetivo no terminal.
-Nunca declarar testes aprovados sem executá-los.
+- `apps/portal` atende alunos e motoristas.
+- `apps/admin` atende a administração.
+- `packages/shared` reúne o Design System e recursos compartilhados.
 
-## Escopo e preservação
-Examinar a configuração existente antes de modificá-la. Preservar configurações funcionais.
-Não modificar os SVGs oficiais de `packages/shared/src/assets/branding/`.
-Conferir sua integridade com `npm run branding:verify`; não atualizar o manifesto para esconder alterações.
-A paleta oficial foi aprovada na Etapa 04.1 e está centralizada em `tokens.css`:
-azul-marinho #16466B, azul-oceano #2479A8, azul-água #48A9C5, azul névoa #EAF4F8 e branco #FFFFFF.
-Não criar cores adicionais de marca; manter neutros e estados funcionais quando necessários à acessibilidade.
-Não avançar automaticamente para etapas seguintes nem realizar commits ou pushes sem solicitação.
+O desenvolvimento atual é incremental, com autenticação simulada e fluxo de
+reservas do aluno em memória. Faça apenas as mudanças relacionadas ao pedido.
+
+## Setup
+
+Execute na raiz de `frontend`, com Node.js 22.12+ e npm 10+. No PowerShell, use `npm.cmd`.
+
+| Comando | Uso |
+| --- | --- |
+| `npm.cmd ci` | Instalar dependências a partir do lockfile. |
+| `npm.cmd run dev:portal` | Iniciar o Portal em http://localhost:5173/. |
+| `npm.cmd run dev:admin` | Iniciar o Admin em http://localhost:5174/. |
+| `npm.cmd run dev` | Iniciar os dois quando ambas as portas estiverem livres. |
+
+Antes de iniciar, verifique as portas 5173 e 5174 e as respostas HTTP locais.
+Reutilize os servidores ativos e inicie apenas os ausentes. Mantenha as portas fixas
+e deixe ambos em execução ao concluir, quando possível. Informe as URLs e, se algum
+servidor não puder ficar ativo, explique a limitação e informe o comando exato.
+
+## Build and test
+
+| Comando | Verificação |
+| --- | --- |
+| `npm.cmd run typecheck` | TypeScript dos workspaces e dos testes. |
+| `npm.cmd test` | Suíte automatizada com Vitest. |
+| `npm.cmd run build` | Builds do Portal e do Admin. |
+| `npm.cmd run branding:verify` | SHA-256 dos quatro SVGs oficiais. |
+| `git diff --check` | Problemas de espaços em branco no diff. |
+
+Execute as verificações pertinentes. Na resposta final, resuma as mudanças,
+os comandos executados, os resultados reais e as pendências relevantes.
+Crie um relatório separado somente quando solicitado.
+
+## Code style
+
+- Use Vue 3 com Composition API e `<script setup lang="ts">` nos componentes novos.
+- Mantenha a tipagem estrita e reutilize tipos e funções existentes.
+- Organize código por responsabilidade. Separe regras de negócio, interface e acesso a dados.
+- Use Pinia para estado compartilhado e consulte a store do domínio como fonte de verdade.
+- Mantenha rotas e guardas no Vue Router da aplicação correspondente.
+- Reutilize componentes acessíveis do Design System e combine Tailwind CSS 4 com os tokens existentes.
+- Use apenas as cores de marca da paleta oficial. Preserve neutros e estados funcionais acessíveis.
+- Cubra cada implementação com testes relevantes. Reaproveite a suíte existente.
+
+## Boundaries
+
+- Modifique o backend somente com autorização explícita.
+- Preserve a identidade visual aprovada. Alterações exigem autorização explícita.
+- Preserve os quatro SVGs oficiais de [branding](packages/shared/src/assets/branding/)
+  e a referência original do [manifesto de hashes](scripts/branding-sha256.json).
+- Examine a configuração existente antes de ajustá-la e preserve configurações funcionais.
+- Evite alterações em arquivos alheios à tarefa e dependências desnecessárias.
+- Mantenha credenciais reais fora do repositório e dos valores públicos `VITE_*`.
+- Não faça commits ou pushes automaticamente e aguarde autorização para avançar de etapa.
+- Não gere capturas nem pastas de evidências visuais. Faça inspeções visuais automatizadas
+  somente mediante solicitação explícita. Preserve relatórios, métricas e scripts históricos
+  sem recriar imagens. Deixe os scripts de captura fora do fluxo atual.
+- Só declare testes aprovados depois de executá-los.
+
+## Subagents
+
+- O coordenador avalia a complexidade, planeja, integra e revisa o resultado final.
+- `explorador` investiga e lê o código. `estilizador` faz ajustes visuais simples.
+  `testador` executa e analisa testes e verificações.
+- Delegue quando houver benefício. Resolva tarefas simples diretamente e paralelize
+  frentes independentes sem atribuir o mesmo arquivo a mais de um agente.
+- Aguarde os resultados antes de concluir. Arquitetura, regras de negócio,
+  autenticação, segurança e mudanças complexas ficam com o coordenador.
+
+## References and skills
+
+- Consulte o [README](README.md) para instalação, arquitetura dos workspaces e comandos.
+- Consulte o [Design System](docs/etapas/02-design-system.md), a
+  [paleta oficial](docs/etapas/04.1-paleta-oficial.md) e os
+  [tokens](packages/shared/src/styles/tokens.css) ao alterar a interface.
+- Consulte [Layouts e navegação](README.md#layouts-e-navegação) ao alterar menus e layouts.
+- Consulte [Autenticação do frontend](docs/autenticacao-frontend.md) para login, sessão e guards.
+  Use a [auditoria histórica](docs/etapas/06.1-auditoria-autenticacao-backend.md) ao discutir a futura integração.
+- Consulte [Reservas do aluno](docs/reservas.md) antes de alterar o calendário ou o fluxo de reservas.
+- Consulte a [configuração do Codex](.codex/config.toml) e os [perfis](.codex/agents/)
+  quando precisar revisar a delegação.
+- Leia apenas as referências pertinentes à tarefa. Aplique skills disponíveis
+  quando forem solicitadas ou relevantes, seguindo as instruções da skill selecionada.

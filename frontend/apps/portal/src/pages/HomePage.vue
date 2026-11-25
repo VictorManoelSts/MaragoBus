@@ -2,16 +2,19 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { CalendarDays } from '@lucide/vue'
-import { BaseAlert, BaseBadge, BaseCard } from '@maragobus/shared'
+import { BaseAlert, BaseBadge, BaseButton, BaseCard } from '@maragobus/shared'
 import { useSessionStore } from '@maragobus/shared/auth/session'
+import ReservationReceiptModal from '../components/ReservationReceiptModal.vue'
+import { useReservationReceipt } from '../composables/useReservationReceipt'
 import { studentNavigationItems } from '../router/student-navigation'
-import { getMockStudentHome } from '../mocks/student-home'
-import type { StudentHomeSummary } from '../types/student-home'
+import { useReservationsStore } from '../stores/reservations'
+import { getTransportDate } from '../utils/reservation-availability'
+import { getReceiptAvailability } from '../utils/reservation-receipt'
 
-const props = withDefaults(defineProps<{ summary?: StudentHomeSummary }>(), {
-  summary: getMockStudentHome,
-})
 const session = useSessionStore()
+const reservations = useReservationsStore()
+const { reference, receipt, receiptUnavailable, openReceipt, closeReceipt } = useReservationReceipt()
+const summary = computed(() => reservations.getHomeSummary(getTransportDate(reference.value)))
 const studentName = computed(() => session.user?.name.trim().split(/\s+/)[0])
 const quickLinks = studentNavigationItems.filter(item =>
   ['new-reservation', 'reservations', 'announcements'].includes(item.name))
@@ -55,15 +58,25 @@ function formatTravelDate(date: string) {
               <dd class="text-body">{{ summary.currentReservation.boardingPoint }}</dd>
             </div>
           </dl>
-          <RouterLink to="/reservas" class="mb-button mb-button--outline mb-button--md w-full sm:w-auto">Ver minha reserva</RouterLink>
+          <div class="flex flex-wrap gap-3">
+            <BaseButton
+              v-if="getReceiptAvailability(summary.currentReservation, reference) === 'available'"
+              class="w-full sm:w-auto" @click="openReceipt(summary.currentReservation.id)"
+            >
+              Ver comprovante
+            </BaseButton>
+            <RouterLink to="/reservas" class="mb-button mb-button--outline mb-button--md w-full sm:w-auto">Ver minha reserva</RouterLink>
+          </div>
         </div>
         <div v-else class="space-y-5">
           <p class="text-body text-muted">Você não tem uma reserva atual para apresentar.</p>
           <RouterLink to="/reservar" class="mb-button mb-button--primary mb-button--md w-full sm:w-auto">Fazer reserva</RouterLink>
         </div>
       </BaseCard>
+      <BaseAlert v-if="receiptUnavailable" variant="info">O comprovante desta reserva está indisponível.</BaseAlert>
       <BaseAlert v-if="summary.futureReservation?.status === 'confirmed'" variant="info">
-        Sua reserva para o próximo dia de viagem está confirmada.
+        <p>Sua reserva para o próximo dia de viagem está confirmada.</p>
+        <p>O comprovante estará disponível a partir das 00h do dia da viagem (horário de Alagoas).</p>
       </BaseAlert>
     </section>
 
@@ -79,5 +92,6 @@ function formatTravelDate(date: string) {
       </ul>
       <p class="text-helper text-muted">Em Notificações, você encontra os avisos administrativos.</p>
     </nav>
+    <ReservationReceiptModal :reservation="receipt" @close="closeReceipt" />
   </div>
 </template>

@@ -1,9 +1,18 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw, RouterHistory } from 'vue-router'
 import type { Pinia } from 'pinia'
+import type { Component } from 'vue'
 import { createAccessGuard } from '@maragobus/shared/auth/route-access'
 import { studentNavigationItems } from './student-navigation'
-import { driverNavigationItems } from './driver-navigation'
+import { driverFeatures, driverProfile } from './driver-navigation'
+
+const studentPages: Partial<Record<string, () => Promise<{ default: Component }>>> = {
+  home: () => import('../pages/HomePage.vue'),
+  'new-reservation': () => import('../pages/NewReservationPage.vue'),
+  reservations: () => import('../pages/StudentReservationsPage.vue'),
+  announcements: () => import('../pages/StudentNotificationsPage.vue'),
+  profile: () => import('../pages/StudentProfilePage.vue'),
+}
 
 const routes: RouteRecordRaw[] = [
   {
@@ -16,16 +25,15 @@ const routes: RouteRecordRaw[] = [
     path: '/',
     meta: { requiresAuth: true, allowedRoles: ['student'] },
     component: () => import('../layouts/StudentLayout.vue'),
-    children: studentNavigationItems.map(item => ({
-      path: item.path.slice(1),
-      name: item.name,
-      component: item.name === 'home'
-        ? () => import('../pages/HomePage.vue')
-        : item.name === 'new-reservation'
-          ? () => import('../pages/NewReservationPage.vue')
-          : () => import('../pages/PortalPlaceholderPage.vue'),
-      props: item.name === 'home' || item.name === 'new-reservation' ? false : { title: item.label, description: item.description, message: item.message, showLogout: item.name === 'profile' },
-    })),
+    children: studentNavigationItems.map(item => {
+      const page = studentPages[item.name]
+      return {
+        path: item.path.slice(1),
+        name: item.name,
+        component: page ?? (() => import('../pages/PortalPlaceholderPage.vue')),
+        props: page ? false : { title: item.label, description: item.description, message: item.message },
+      }
+    }),
   },
   { path: '/historico', name: 'history', redirect: { name: 'reservations' } },
   { path: '/avisos', redirect: { name: 'announcements' } },
@@ -34,10 +42,10 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, allowedRoles: ['driver'] },
     component: () => import('../layouts/DriverLayout.vue'),
     children: [
-      { path: '', redirect: { name: 'driver-reservations' } },
+      { path: '', name: 'driver-home', component: () => import('../pages/DriverHomePage.vue') },
       { path: 'passageiros', name: 'driver-passengers', redirect: { name: 'driver-reservations' } },
       { path: 'resumo', name: 'driver-summary', redirect: { name: 'driver-reservations' } },
-      ...driverNavigationItems.map(item => ({
+      ...[...driverFeatures, driverProfile].map(item => ({
         path: item.path.slice('/motorista/'.length),
         name: item.name,
         component: () => import('../pages/PortalPlaceholderPage.vue'),

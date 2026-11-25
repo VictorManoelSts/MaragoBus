@@ -6,7 +6,7 @@ export interface BoardingPointOption {
 }
 
 /** Contexto informativo do formulário, não representa uma reserva criada. */
-export interface ReservationFormContext extends Pick<StudentReservationSummary, 'travelDate'> {
+export interface ReservationFormContext {
   college: StudentReservationSummary['college'] | null
   boardingPoints: readonly BoardingPointOption[]
   defaultBoardingPointId: string | null

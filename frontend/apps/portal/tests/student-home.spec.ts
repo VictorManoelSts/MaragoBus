@@ -1,30 +1,35 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory } from 'vue-router'
 import { useSessionStore } from '@maragobus/shared/auth/session'
 import HomePage from '../src/pages/HomePage.vue'
 import { createPortalRouter } from '../src/router'
-import { getMockStudentHome } from '../src/mocks/student-home'
-import type { StudentHomeSummary, StudentReservationSummary } from '../src/types/student-home'
+import { getMockReservationForm } from '../src/mocks/reservation-form'
+import { useReservationsStore } from '../src/stores/reservations'
 import { setMockSession } from '../../../packages/shared/tests/auth-fixture'
 
-const current: StudentReservationSummary = {
-  id: 'synthetic-current', travelDate: '2026-11-12', college: 'Faculdade de teste',
-  boardingPoint: 'Ponto de teste', status: 'confirmed',
+function confirm(travelDate: string, instant: string, college = 'Faculdade de teste') {
+  vi.setSystemTime(new Date(instant))
+  expect(useReservationsStore().confirm({
+    travelDate, boardingPointId: 'demo-center', closures: [],
+    context: { ...getMockReservationForm(), college },
+  }).status).toBe('confirmed')
 }
-const future: StudentReservationSummary = {
-  ...current, id: 'synthetic-future', travelDate: '2026-11-13', college: 'Destino futuro de teste',
-}
-async function page(summary?: StudentHomeSummary) {
+
+async function page() {
   const router = createPortalRouter(createMemoryHistory())
   await router.push('/')
   await router.isReady()
-  const wrapper = mount(HomePage, { props: summary ? { summary } : {}, global: { plugins: [router] } })
+  const wrapper = mount(HomePage, { global: { plugins: [router] } })
   return { wrapper, router }
 }
 
 describe('Página inicial do aluno', () => {
   beforeEach(async () => { await setMockSession('student') })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
 
   it('usa o nome da sessão e acompanha sua atualização sem expor dados pessoais', async () => {
     const { wrapper } = await page()
@@ -42,15 +47,16 @@ describe('Página inicial do aluno', () => {
     expect(wrapper.find('time').exists()).toBe(false)
     expect(wrapper.find('[role="status"]').exists()).toBe(false)
     expect(wrapper.text()).not.toMatch(/reservas (abertas|fechadas)/i)
-    expect(getMockStudentHome()).toEqual({ currentReservation: null, futureReservation: null })
+    expect(useReservationsStore().reservations).toHaveLength(0)
   })
 
   it('exibe os dados essenciais da reserva atual e acesso aos detalhes', async () => {
-    const { wrapper, router } = await page({ currentReservation: current, futureReservation: null })
+    confirm('2026-11-12', '2026-11-12T13:00:00Z')
+    const { wrapper, router } = await page()
     expect(wrapper.get('time').attributes('datetime')).toBe('2026-11-12')
     expect(wrapper.get('time').text()).toBe('12/11/2026')
     expect(wrapper.get('dl').text()).toContain('Faculdade de teste')
-    expect(wrapper.get('dl').text()).toContain('Ponto de teste')
+    expect(wrapper.get('dl').text()).toContain('Praça de exemplo — Centro')
     expect(wrapper.text()).toContain('Confirmada')
     await wrapper.get('section a').trigger('click')
     await flushPromises()
@@ -58,8 +64,12 @@ describe('Página inicial do aluno', () => {
   })
 
   it('mantém a reserva atual quando há futura confirmada e mostra somente aviso contextual', async () => {
-    const { wrapper } = await page({ currentReservation: current, futureReservation: future })
-    expect(wrapper.get('[role="status"]').text()).toBe('Sua reserva para o próximo dia de viagem está confirmada.')
+    confirm('2026-11-12', '2026-11-12T13:00:00Z')
+    const { wrapper } = await page()
+    confirm('2026-11-13', '2026-11-12T20:00:00Z', 'Destino futuro de teste')
+    await flushPromises()
+    expect(wrapper.get('[role="status"]').text()).toContain('Sua reserva para o próximo dia de viagem está confirmada.')
+    expect(wrapper.get('[role="status"]').text()).toContain('a partir das 00h')
     expect(wrapper.get('time').text()).toBe('12/11/2026')
     expect(wrapper.findAll('time')).toHaveLength(1)
     expect(wrapper.text()).not.toContain('Destino futuro de teste')
@@ -67,15 +77,34 @@ describe('Página inicial do aluno', () => {
   })
 
   it('não promove uma reserva futura a atual quando a atual está ausente', async () => {
-    const { wrapper } = await page({ currentReservation: null, futureReservation: future })
+    confirm('2026-11-13', '2026-11-12T20:00:00Z')
+    const { wrapper } = await page()
     expect(wrapper.text()).toContain('Você não tem uma reserva atual')
     expect(wrapper.find('time').exists()).toBe(false)
     expect(wrapper.find('[role="status"]').exists()).toBe(true)
   })
 
-  it('não mostra aviso de confirmação para futura cancelada', async () => {
-    const { wrapper } = await page({ currentReservation: current, futureReservation: { ...future, status: 'cancelled' } })
+  it('promove a futura à reserva do dia na virada da meia-noite em Maceió', async () => {
+    confirm('2026-11-13', '2026-11-12T20:00:00Z')
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+    vi.setSystemTime(new Date('2026-11-13T02:59:59Z'))
+    const { wrapper } = await page()
+    expect(wrapper.find('time').exists()).toBe(false)
+    vi.setSystemTime(new Date('2026-11-13T03:00:00Z'))
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flushPromises()
+    expect(wrapper.get('time').attributes('datetime')).toBe('2026-11-13')
     expect(wrapper.find('[role="status"]').exists()).toBe(false)
+  })
+
+  it('atualiza o resumo ao trocar o aluno autenticado', async () => {
+    confirm('2026-11-12', '2026-11-12T13:00:00Z')
+    const { wrapper } = await page()
+    expect(wrapper.get('time').attributes('datetime')).toBe('2026-11-12')
+    useSessionStore().user = { id: 'outro-aluno', name: 'Outro aluno', role: 'student' }
+    await flushPromises()
+    expect(wrapper.find('time').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Faculdade de teste')
   })
 
   it('navega para fazer reserva a partir do estado vazio', async () => {

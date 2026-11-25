@@ -15,15 +15,12 @@ export const studentNavigationItems: readonly StudentNavigationItem[] = [
   },
   {
     name: 'reservations', path: '/reservas', label: 'Minhas reservas', icon: CalendarDays,
-    description: 'Consulte futuramente sua reserva atual, reservas anteriores, histórico de cancelamentos, detalhes e comprovantes disponíveis.',
   },
   {
     // Nome interno preservado para manter a compatibilidade dos links nomeados.
     name: 'announcements', path: '/notificacoes', label: 'Notificações', icon: Bell,
-    description: 'Espaço exclusivo para avisos administrativos enviados aos alunos.',
   },
   {
     name: 'profile', path: '/perfil', label: 'Meu perfil', icon: UserRound,
-    description: 'Espaço para consultar as informações do seu perfil de aluno.',
   },
 ]
