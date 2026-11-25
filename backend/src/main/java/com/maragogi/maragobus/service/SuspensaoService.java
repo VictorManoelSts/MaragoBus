@@ -69,18 +69,22 @@ public class SuspensaoService {
     public Optional<Suspensao> avaliarEAplicarPorAdvertencia(
             @NotNull Advertencia advertencia,
             @NotNull Usuario administradorResponsavel,
-            @NotNull LocalDateTime dataHoraAplicacao) {
+            @NotNull LocalDateTime dataHoraAplicacao,
+            Integer duracaoSuspensaoDias) {
 
         UUID alunoId = advertencia.getSolicitacaoAdvertencia().getAluno().getId();
         long totalAdvertencias = advertenciaRepository.countBySolicitacaoAdvertenciaAlunoId(alunoId);
 
         if (!regrasTemporaisSuspensao.deveGerarSuspensao(totalAdvertencias)) {
+            if (duracaoSuspensaoDias != null) {
+                throw new RegraNegocioException("A duração só pode ser informada ao completar um ciclo de três advertências.");
+            }
             return Optional.empty();
         }
 
+        DuracaoSuspensao duracao = regrasTemporaisSuspensao.validarDuracaoEscolhida(duracaoSuspensaoDias);
         Set<LocalDate> datasBloqueadas = dataSemFuncionamentoRepository.findDatasAPartirDe(
                 dataHoraAplicacao.toLocalDate());
-        DuracaoSuspensao duracao = regrasTemporaisSuspensao.calcularDuracao(totalAdvertencias);
         LocalDate dataInicio = regrasTemporaisSuspensao.calcularDataInicio(dataHoraAplicacao, datasBloqueadas);
         LocalDate dataFim = regrasTemporaisSuspensao.calcularDataFim(dataInicio, duracao, datasBloqueadas);
 

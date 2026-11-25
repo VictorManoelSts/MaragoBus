@@ -304,7 +304,7 @@ class DataSemFuncionamentoIntegrationTest {
         relogio.definir("2026-10-12T09:00:00");
         for (int i = 1; i <= 3; i++) {
             analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv " + i),
-                    new AprovacaoSolicitacaoAdvertenciaRequest(null));
+                    new AprovacaoSolicitacaoAdvertenciaRequest(null, i == 3 ? 1 : null));
         }
 
         // Ciclo 2: 6ª advertência na quarta 14/10 às 09:30 -> 3 dias úteis: Qua(14), Qui(15), Sex(16)
@@ -312,7 +312,7 @@ class DataSemFuncionamentoIntegrationTest {
         analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 4"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
         analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 5"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
         var aprovacao6 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 6"),
-                new AprovacaoSolicitacaoAdvertenciaRequest("Gatilho 3 dias"));
+                new AprovacaoSolicitacaoAdvertenciaRequest("Gatilho 3 dias", 3));
         assertNotNull(aprovacao6.suspensaoId());
 
         LocalDate quintaBloqueada = LocalDate.of(2026, 10, 15);
@@ -365,7 +365,7 @@ class DataSemFuncionamentoIntegrationTest {
         analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 1"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
         analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 2"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
         var aprovacao3 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 3"),
-                new AprovacaoSolicitacaoAdvertenciaRequest(null));
+                new AprovacaoSolicitacaoAdvertenciaRequest(null, 1));
 
         assertNotNull(aprovacao3.suspensaoId());
         transacao.executeWithoutResult(status -> {

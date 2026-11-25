@@ -136,7 +136,8 @@ public class AnaliseSolicitacaoAdvertenciaService {
         var advertencia = advertenciaRepository.saveAndFlush(
                 Advertencia.builder().solicitacaoAdvertencia(solicitacao).build());
 
-        var suspensao = suspensaoService.avaliarEAplicarPorAdvertencia(advertencia, administrador, agora);
+        var suspensao = suspensaoService.avaliarEAplicarPorAdvertencia(
+                advertencia, administrador, agora, dados.duracaoSuspensaoDias());
 
         return new AprovacaoSolicitacaoAdvertenciaResponse(
                 solicitacao.getId(),

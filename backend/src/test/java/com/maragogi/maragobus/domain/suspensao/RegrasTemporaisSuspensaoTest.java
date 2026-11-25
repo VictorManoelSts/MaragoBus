@@ -40,19 +40,17 @@ class RegrasTemporaisSuspensaoTest {
     }
 
     @Test
-    void deveCalcularProgressaoDeDuracaoConformeCicloDeAdvertencias() {
-        assertEquals(DuracaoSuspensao.UM_DIA, regras.calcularDuracao(3));
-        assertEquals(DuracaoSuspensao.TRES_DIAS, regras.calcularDuracao(6));
-        assertEquals(DuracaoSuspensao.CINCO_DIAS, regras.calcularDuracao(9));
-        assertEquals(DuracaoSuspensao.CINCO_DIAS, regras.calcularDuracao(12));
-        assertEquals(DuracaoSuspensao.CINCO_DIAS, regras.calcularDuracao(15));
+    void deveAceitarAsTresDuracoesEscolhidasPeloAdministrador() {
+        assertEquals(DuracaoSuspensao.UM_DIA, regras.validarDuracaoEscolhida(1));
+        assertEquals(DuracaoSuspensao.TRES_DIAS, regras.validarDuracaoEscolhida(3));
+        assertEquals(DuracaoSuspensao.CINCO_DIAS, regras.validarDuracaoEscolhida(5));
     }
 
     @Test
-    void deveLancarExcecaoAoCalcularDuracaoForaDoMultiploDeTres() {
-        assertThrows(RegraNegocioException.class, () -> regras.calcularDuracao(0));
-        assertThrows(RegraNegocioException.class, () -> regras.calcularDuracao(2));
-        assertThrows(RegraNegocioException.class, () -> regras.calcularDuracao(4));
+    void deveRejeitarDuracaoAusenteOuForaDasOpcoes() {
+        for (Integer dias : java.util.Arrays.asList(null, -1, 0, 2, 4, 6)) {
+            assertThrows(RegraNegocioException.class, () -> regras.validarDuracaoEscolhida(dias));
+        }
     }
 
     @Test

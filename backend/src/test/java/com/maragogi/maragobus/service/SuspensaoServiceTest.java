@@ -89,7 +89,7 @@ class SuspensaoServiceTest {
         when(advertenciaRepository.countBySolicitacaoAdvertenciaAlunoId(aluno.getId())).thenReturn(2L);
 
         Optional<Suspensao> resultado = suspensaoService.avaliarEAplicarPorAdvertencia(
-                advertencia, admin, LocalDateTime.of(2026, 10, 7, 10, 0));
+                advertencia, admin, LocalDateTime.of(2026, 10, 7, 10, 0), null);
 
         assertTrue(resultado.isEmpty());
         verify(suspensaoRepository, never()).save(any());
@@ -120,7 +120,7 @@ class SuspensaoServiceTest {
                 aluno.getId(), StatusReserva.CONFIRMADA, LocalDate.of(2026, 10, 7), LocalDate.of(2026, 10, 7)))
                 .thenReturn(List.of(reservaHoje));
 
-        Optional<Suspensao> resultado = suspensaoService.avaliarEAplicarPorAdvertencia(advertencia, admin, agora);
+        Optional<Suspensao> resultado = suspensaoService.avaliarEAplicarPorAdvertencia(advertencia, admin, agora, 1);
 
         assertTrue(resultado.isPresent());
         Suspensao suspensao = resultado.get();
@@ -150,7 +150,7 @@ class SuspensaoServiceTest {
                 .statusReserva(StatusReserva.CONFIRMADA)
                 .build();
 
-        when(advertenciaRepository.countBySolicitacaoAdvertenciaAlunoId(aluno.getId())).thenReturn(6L);
+        when(advertenciaRepository.countBySolicitacaoAdvertenciaAlunoId(aluno.getId())).thenReturn(3L);
         when(suspensaoRepository.save(any(Suspensao.class))).thenAnswer(inv -> {
             Suspensao s = inv.getArgument(0);
             s.setId(UUID.randomUUID());
@@ -160,7 +160,7 @@ class SuspensaoServiceTest {
                 aluno.getId(), StatusReserva.CONFIRMADA, LocalDate.of(2026, 10, 8), LocalDate.of(2026, 10, 12)))
                 .thenReturn(List.of(reservaQuinta));
 
-        Optional<Suspensao> resultado = suspensaoService.avaliarEAplicarPorAdvertencia(advertencia, admin, agora);
+        Optional<Suspensao> resultado = suspensaoService.avaliarEAplicarPorAdvertencia(advertencia, admin, agora, 3);
 
         assertTrue(resultado.isPresent());
         assertEquals(DuracaoSuspensao.TRES_DIAS, resultado.get().getDuracao());
@@ -191,7 +191,7 @@ class SuspensaoServiceTest {
                 aluno.getId(), StatusReserva.CONFIRMADA, LocalDate.of(2026, 10, 8), LocalDate.of(2026, 10, 13)))
                 .thenReturn(List.of());
 
-        Optional<Suspensao> resultado = suspensaoService.avaliarEAplicarPorAdvertencia(advertencia, admin, agora);
+        Optional<Suspensao> resultado = suspensaoService.avaliarEAplicarPorAdvertencia(advertencia, admin, agora, 3);
 
         assertTrue(resultado.isPresent());
         assertEquals(DuracaoSuspensao.TRES_DIAS, resultado.get().getDuracao());

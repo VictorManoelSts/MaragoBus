@@ -11,7 +11,7 @@ import java.time.LocalTime;
 import java.util.Objects;
 import java.util.Set;
 
-/** Regras puras de progressão e calendário de suspensão; sem acesso à persistência. */
+/** Regras puras de ciclos e calendário de suspensão; sem acesso à persistência. */
 @Component
 public class RegrasTemporaisSuspensao {
     private static final LocalTime LIMITE_INICIO_MESMO_DIA = LocalTime.of(11, 0);
@@ -26,18 +26,13 @@ public class RegrasTemporaisSuspensao {
         return totalAdvertenciasAprovadas > 0 && totalAdvertenciasAprovadas % 3 == 0;
     }
 
-    public DuracaoSuspensao calcularDuracao(long totalAdvertenciasAprovadas) {
-        if (!deveGerarSuspensao(totalAdvertenciasAprovadas)) {
-            throw new RegraNegocioException(
-                    "A quantidade de advertências aprovadas não completa um ciclo de suspensão.");
+    public DuracaoSuspensao validarDuracaoEscolhida(Integer dias) {
+        for (DuracaoSuspensao duracao : DuracaoSuspensao.values()) {
+            if (dias != null && duracao.getDias() == dias) {
+                return duracao;
+            }
         }
-        if (totalAdvertenciasAprovadas == 3) {
-            return DuracaoSuspensao.UM_DIA;
-        }
-        if (totalAdvertenciasAprovadas == 6) {
-            return DuracaoSuspensao.TRES_DIAS;
-        }
-        return DuracaoSuspensao.CINCO_DIAS;
+        throw new RegraNegocioException("Ao completar um ciclo, informe uma suspensão de 1, 3 ou 5 dias de transporte.");
     }
 
     /**

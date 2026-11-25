@@ -178,7 +178,7 @@ class SuspensaoIntegrationTest {
         assertNull(r1.suspensaoId());
         assertNull(r2.suspensaoId());
 
-        var r3 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Ocorrência 3"), new AprovacaoSolicitacaoAdvertenciaRequest("Gatilho"));
+        var r3 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Ocorrência 3"), new AprovacaoSolicitacaoAdvertenciaRequest("Gatilho", 1));
         assertNotNull(r3.suspensaoId());
 
         transacao.executeWithoutResult(status -> {
@@ -232,7 +232,7 @@ class SuspensaoIntegrationTest {
 
         analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 1"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
         analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 2"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
-        var r3 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 3"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
+        var r3 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 3"), new AprovacaoSolicitacaoAdvertenciaRequest(null, 1));
         assertNotNull(r3.suspensaoId());
 
         transacao.executeWithoutResult(status -> {
@@ -258,11 +258,11 @@ class SuspensaoIntegrationTest {
     }
 
     @Test
-    void deveAplicarProgressaoDeTresECincoDiasPulandoFimDeSemanaEConsultarVigencia() {
+    void deveAplicarDuracoesEscolhidasEmCadaCicloPulandoFimDeSemanaEConsultarVigencia() {
         // Ciclo 1: 3ª advertência na quarta 07/10 às 09:00 -> 1 dia (07/10 a 07/10)
         relogio.definir("2026-10-07T09:00:00");
         for (int i = 1; i <= 3; i++) {
-            analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv " + i), new AprovacaoSolicitacaoAdvertenciaRequest(null));
+            analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv " + i), new AprovacaoSolicitacaoAdvertenciaRequest(null, i == 3 ? 1 : null));
         }
 
         // Ciclo 2: 6ª advertência na quinta 08/10 às 10:00 -> 3 dias úteis: Qui(08), Sex(09), pula Sab/Dom, Seg(12)
@@ -272,7 +272,7 @@ class SuspensaoIntegrationTest {
 
         analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 4"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
         analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 5"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
-        var r6 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 6"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
+        var r6 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 6"), new AprovacaoSolicitacaoAdvertenciaRequest(null, 3));
         assertNotNull(r6.suspensaoId());
 
         transacao.executeWithoutResult(status -> {
@@ -292,9 +292,11 @@ class SuspensaoIntegrationTest {
 
         // Ciclo 3: 9ª advertência na quarta 14/10 às 10:00 -> 5 dias úteis: Qua(14), Qui(15), Sex(16), Seg(19), Ter(20)
         relogio.definir("2026-10-14T10:00:00");
+        UUID reservaUltimoDiaId = criarReservaConfirmada(LocalDate.of(2026, 10, 20));
+        UUID reservaAposSuspensaoId = criarReservaConfirmada(LocalDate.of(2026, 10, 21));
         analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 7"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
         analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 8"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
-        var r9 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 9"), new AprovacaoSolicitacaoAdvertenciaRequest(null));
+        var r9 = analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 9"), new AprovacaoSolicitacaoAdvertenciaRequest(null, 5));
         assertNotNull(r9.suspensaoId());
 
         transacao.executeWithoutResult(status -> {
@@ -304,6 +306,11 @@ class SuspensaoIntegrationTest {
             assertEquals(DuracaoSuspensao.CINCO_DIAS, s3.getDuracao());
             assertEquals(LocalDate.of(2026, 10, 14), s3.getDataInicio());
             assertEquals(LocalDate.of(2026, 10, 20), s3.getDataFim());
+            assertEquals(adminId, s3.getAdministradorResponsavel().getId());
+            assertEquals(StatusReserva.CANCELADA_POR_SUSPENSAO,
+                    reservas.findById(reservaUltimoDiaId).orElseThrow().getStatusReserva());
+            assertEquals(StatusReserva.CONFIRMADA,
+                    reservas.findById(reservaAposSuspensaoId).orElseThrow().getStatusReserva());
         });
 
         // Consultas administrativas em 14/10/2026: 3 históricas, apenas 1 vigente
@@ -315,6 +322,39 @@ class SuspensaoIntegrationTest {
         assertEquals(1, somenteVigentes.getTotalElements());
         assertEquals(r9.suspensaoId(), somenteVigentes.getContent().getFirst().id());
         assertTrue(somenteVigentes.getContent().getFirst().vigente());
+    }
+
+    @Test
+    void deveRejeitarDuracaoInvalidaOuForaDoCicloEPreservarSolicitacaoParaNovaDecisao() {
+        UUID primeiraId = novaSolicitacaoPendente("Adv 1");
+        UUID reservaId = criarReservaConfirmada(LocalDate.of(2026, 10, 13));
+
+        assertThrows(RegraNegocioException.class, () -> analiseService.aprovar(
+                adminId, primeiraId, new AprovacaoSolicitacaoAdvertenciaRequest(null, 5)));
+        assertEquals(0, advertencias.count());
+
+        analiseService.aprovar(adminId, primeiraId, new AprovacaoSolicitacaoAdvertenciaRequest(null));
+        analiseService.aprovar(adminId, novaSolicitacaoPendente("Adv 2"),
+                new AprovacaoSolicitacaoAdvertenciaRequest(null));
+        UUID terceiraId = novaSolicitacaoPendente("Adv 3");
+
+        assertThrows(RegraNegocioException.class, () -> analiseService.aprovar(
+                adminId, terceiraId, new AprovacaoSolicitacaoAdvertenciaRequest(null)));
+        assertThrows(RegraNegocioException.class, () -> analiseService.aprovar(
+                adminId, terceiraId, new AprovacaoSolicitacaoAdvertenciaRequest(null, 2)));
+
+        assertEquals(2, advertencias.count());
+        assertEquals(0, suspensoes.count());
+        assertEquals(StatusSolicitacaoAdvertencia.PENDENTE, solicitacoes.findById(terceiraId).orElseThrow().getStatus());
+        assertEquals(StatusReserva.CONFIRMADA, reservas.findById(reservaId).orElseThrow().getStatusReserva());
+        assertTrue(eventos.findByReservaIdOrderByDataHoraEventoAscIdAsc(reservaId).isEmpty());
+
+        var resposta = analiseService.aprovar(adminId, terceiraId,
+                new AprovacaoSolicitacaoAdvertenciaRequest(null, 5));
+        var suspensao = suspensoes.findById(resposta.suspensaoId()).orElseThrow();
+        assertEquals(DuracaoSuspensao.CINCO_DIAS, suspensao.getDuracao());
+        assertEquals(LocalDate.of(2026, 10, 13), suspensao.getDataFim());
+        assertEquals(StatusReserva.CANCELADA_POR_SUSPENSAO, reservas.findById(reservaId).orElseThrow().getStatusReserva());
     }
 
     @ParameterizedTest
@@ -338,7 +378,7 @@ class SuspensaoIntegrationTest {
             jdbc.execute("create trigger falhar_suspensao_teste after insert on " + tabela
                     + " for each row execute function falhar_suspensao_teste()");
             var erro = assertThrows(DataIntegrityViolationException.class,
-                    () -> analiseService.aprovar(adminId, terceiraSolicitacaoId, new AprovacaoSolicitacaoAdvertenciaRequest("Falha")));
+                    () -> analiseService.aprovar(adminId, terceiraSolicitacaoId, new AprovacaoSolicitacaoAdvertenciaRequest("Falha", 1)));
             assertTrue(erro.getMostSpecificCause().getMessage().contains("FALHA_CONTROLADA_SUSPENSAO"));
         } finally {
             jdbc.execute("drop trigger if exists falhar_suspensao_teste on " + tabela);
@@ -379,7 +419,7 @@ class SuspensaoIntegrationTest {
             try {
                 assertTrue(primeiraAplicada.await(15, TimeUnit.SECONDS));
                 var segunda = executor.submit(() ->
-                        analiseService.aprovar(adminId, terceiraId, new AprovacaoSolicitacaoAdvertenciaRequest("Terceira")));
+                        analiseService.aprovar(adminId, terceiraId, new AprovacaoSolicitacaoAdvertenciaRequest("Terceira", 1)));
 
                 assertTrue(aguardarLockEmUsuarios(), "A segunda aprovação do mesmo aluno deve aguardar o lock do aluno.");
                 liberarCommit.countDown();
@@ -417,7 +457,7 @@ class SuspensaoIntegrationTest {
 
         try (var executor = Executors.newFixedThreadPool(2)) {
             var aprovacao = executor.submit(() -> transacao.execute(status -> {
-                var resposta = analiseService.aprovar(adminId, terceiraId, new AprovacaoSolicitacaoAdvertenciaRequest("Terceira"));
+                var resposta = analiseService.aprovar(adminId, terceiraId, new AprovacaoSolicitacaoAdvertenciaRequest("Terceira", 1));
                 suspensoes.flush();
                 suspensaoAplicada.countDown();
                 try { assertTrue(liberarCommit.await(15, TimeUnit.SECONDS)); }
