@@ -14,6 +14,11 @@ const studentPages: Partial<Record<string, () => Promise<{ default: Component }>
   profile: () => import('../pages/StudentProfilePage.vue'),
 }
 
+const driverPages: Partial<Record<string, () => Promise<{ default: Component }>>> = {
+  'driver-reservations': () => import('../pages/DriverReservationsPage.vue'),
+  'driver-warning-requests': () => import('../pages/DriverWarningRequestsPage.vue'),
+}
+
 const routes: RouteRecordRaw[] = [
   {
     path: '/login',
@@ -45,16 +50,15 @@ const routes: RouteRecordRaw[] = [
       { path: '', name: 'driver-home', component: () => import('../pages/DriverHomePage.vue') },
       { path: 'passageiros', name: 'driver-passengers', redirect: { name: 'driver-reservations' } },
       { path: 'resumo', name: 'driver-summary', redirect: { name: 'driver-reservations' } },
-      ...[...driverFeatures, driverProfile].map(item => ({
-        path: item.path.slice('/motorista/'.length),
-        name: item.name,
-        component: item.name === 'driver-reservations'
-          ? () => import('../pages/DriverReservationsPage.vue')
-          : () => import('../pages/PortalPlaceholderPage.vue'),
-        props: item.name === 'driver-reservations'
-          ? false
-          : { title: item.title, description: item.description, showLogout: item.name === 'driver-profile' },
-      })),
+      ...[...driverFeatures, driverProfile].map(item => {
+        const page = driverPages[item.name]
+        return {
+          path: item.path.slice('/motorista/'.length),
+          name: item.name,
+          component: page ?? (() => import('../pages/PortalPlaceholderPage.vue')),
+          props: page ? false : { title: item.title, description: item.description, showLogout: item.name === 'driver-profile' },
+        }
+      }),
     ],
   },
 ]

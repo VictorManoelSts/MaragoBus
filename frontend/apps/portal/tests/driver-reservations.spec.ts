@@ -73,7 +73,7 @@ describe('Consulta de reservas do motorista', () => {
     expect(names()).toEqual(['Álvaro Ramos', 'Ana Ramos', 'Bruno Lima', 'Érica Ramos', 'Zélia Ramos'])
     expect(wrapper.get('li').text()).toContain('Faculdade A')
     expect(wrapper.get('li').text()).toContain('Bairro Sul')
-    expect(wrapper.find('button').exists()).toBe(false)
+    expect(wrapper.findAll('button').map(button => button.text())).toEqual(Array(5).fill('Solicitar advertência'))
     await wrapper.get('#driver-reservation-name').setValue('  RAMÓS ')
     await wrapper.get('#driver-reservation-college').setValue('Faculdade A')
     await wrapper.get('#driver-reservation-point').setValue('demo-center')

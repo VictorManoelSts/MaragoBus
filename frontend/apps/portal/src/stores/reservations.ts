@@ -51,6 +51,15 @@ export const useReservationsStore = defineStore('reservations', () => {
         Object.freeze({ id, studentName, college, boardingPointId, boardingPoint }))
   }
 
+  function findDriverReservationForWarning(id: string) {
+    if (!session.authenticated || session.user?.role !== 'driver') return
+
+    const reservation = reservations.value.find(item => item.id === id && item.status === 'confirmed')
+    if (!reservation) return
+    const { studentId, studentName, travelDate } = reservation
+    return { studentId, studentName, travelDate }
+  }
+
   function getHomeSummary(today: TravelDate): StudentHomeSummary {
     let futureReservation: SimulatedReservation | null = null
     for (const reservation of studentReservations.value) {
@@ -128,6 +137,7 @@ export const useReservationsStore = defineStore('reservations', () => {
 
   return {
     studentReservations, confirming, studentId, findReservation, findConfirmed, listDriverReservations,
+    findDriverReservationForWarning,
     getHomeSummary, getReceiptReservation, validateConfirmation, confirm, cancel,
   }
 })

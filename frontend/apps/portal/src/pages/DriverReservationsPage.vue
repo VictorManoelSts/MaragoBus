@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { BaseCard, BaseInput, BaseSelect } from '@maragobus/shared'
+import { computed, nextTick, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
+import { BaseAlert, BaseButton, BaseCard, BaseInput, BaseModal, BaseSelect } from '@maragobus/shared'
 import { useReservationsStore } from '../stores/reservations'
+import { useWarningRequestsStore } from '../stores/warning-requests'
 import { getTransportDate } from '../utils/reservation-availability'
 
 const store = useReservationsStore()
+const warningRequests = useWarningRequestsStore()
 const date = ref(getTransportDate(new Date()))
 const search = ref('')
 const all = 0
@@ -12,6 +15,62 @@ const college = ref<string | number>(all)
 const boardingPoint = ref<string | number>(all)
 const collator = new Intl.Collator('pt-BR', { sensitivity: 'base' })
 const confirmed = computed(() => store.listDriverReservations(date.value))
+const warningId = ref<string>()
+const warningTarget = computed(() => confirmed.value.find(item => item.id === warningId.value))
+const warningReason = ref('')
+const reasonError = ref(false)
+const warningError = ref('')
+const warningSent = ref(false)
+const reasonInput = ref<HTMLTextAreaElement>()
+const errorFeedback = ref<HTMLElement>()
+const successFeedback = ref<HTMLElement>()
+const pageHeading = ref<HTMLElement>()
+const dateFormat = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeZone: 'UTC' })
+
+function closeWarning() {
+  warningId.value = undefined
+  warningReason.value = ''
+  reasonError.value = false
+  warningError.value = ''
+}
+
+async function openWarning(id: string) {
+  warningId.value = id
+  warningSent.value = false
+  await nextTick()
+  reasonInput.value?.focus()
+}
+
+async function submitWarning() {
+  if (!warningId.value) return
+  const result = warningRequests.create(warningId.value, warningReason.value)
+  if (result.status === 'created') {
+    closeWarning()
+    warningSent.value = true
+    await nextTick()
+    successFeedback.value?.focus()
+  } else if (result.status === 'reason-required') {
+    reasonError.value = true
+    warningError.value = ''
+    await nextTick()
+    reasonInput.value?.focus()
+  } else {
+    reasonError.value = false
+    warningError.value = result.status === 'duplicate'
+      ? 'Já existe uma solicitação pendente ou aprovada para esta reserva.'
+      : 'Esta reserva não está disponível para solicitação.'
+    await nextTick()
+    errorFeedback.value?.focus()
+  }
+}
+
+watch(warningTarget, target => {
+  if (!target) closeWarning()
+})
+watch(() => warningRequests.driverId, () => {
+  closeWarning()
+  warningSent.value = false
+})
 
 const collegeOptions = computed(() => [
   { value: all, label: 'Todas as faculdades' },
@@ -53,7 +112,12 @@ watch([collegeOptions, boardingOptions], ([colleges, points]) => {
 
 <template>
   <div class="min-w-0 space-y-6">
-    <h1 class="text-page">Reservas confirmadas</h1>
+    <h1 ref="pageHeading" tabindex="-1" class="text-page">Reservas confirmadas</h1>
+
+    <BaseAlert v-if="warningSent" variant="success">
+      <p ref="successFeedback" tabindex="-1">Solicitação de advertência enviada. Situação inicial: Pendente.</p>
+      <RouterLink :to="{ name: 'driver-warning-requests' }" class="underline">Consultar minhas solicitações</RouterLink>
+    </BaseAlert>
 
     <BaseCard>
       <div class="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -89,8 +153,45 @@ watch([collegeOptions, boardingOptions], ([colleges, points]) => {
               <dd class="text-body">{{ item.boardingPoint }}</dd>
             </div>
           </dl>
+          <template #footer>
+            <BaseButton variant="outline" class="w-full sm:w-auto"
+              :aria-label="`Solicitar advertência para ${item.studentName || 'aluno com nome indisponível'}`"
+              @click="openWarning(item.id)">
+              Solicitar advertência
+            </BaseButton>
+          </template>
         </BaseCard>
       </li>
     </ul>
+
+    <BaseModal :model-value="Boolean(warningTarget)" title="Solicitar advertência"
+      :focus-fallback="() => pageHeading" @update:model-value="closeWarning">
+      <form v-if="warningTarget" id="driver-warning-form" class="space-y-4" novalidate @submit.prevent="submitWarning">
+        <dl class="space-y-2 wrap-anywhere">
+          <div><dt class="text-helper text-muted">Aluno</dt><dd>{{ warningTarget.studentName || 'Nome indisponível' }}</dd></div>
+          <div>
+            <dt class="text-helper text-muted">Data da viagem</dt>
+            <dd><time :datetime="date">{{ dateFormat.format(new Date(`${date}T00:00:00Z`)) }}</time></dd>
+          </div>
+        </dl>
+        <div class="mb-field">
+          <label for="driver-warning-reason" class="mb-label">Motivo</label>
+          <textarea id="driver-warning-reason" ref="reasonInput" v-model="warningReason"
+            class="mb-control" rows="4" required :aria-invalid="reasonError || undefined"
+            :aria-describedby="reasonError ? 'driver-warning-reason-error' : undefined"
+            @input="reasonError = false" />
+          <p v-if="reasonError" id="driver-warning-reason-error" class="mb-error" role="alert">
+            Informe o motivo da solicitação.
+          </p>
+        </div>
+        <BaseAlert v-if="warningError" variant="danger">
+          <p ref="errorFeedback" tabindex="-1">{{ warningError }}</p>
+        </BaseAlert>
+      </form>
+      <template #footer>
+        <BaseButton variant="outline" @click="closeWarning">Voltar</BaseButton>
+        <BaseButton type="submit" form="driver-warning-form">Enviar solicitação</BaseButton>
+      </template>
+    </BaseModal>
   </div>
 </template>

@@ -29,7 +29,7 @@ async function application(path: string) {
 }
 
 describe('Navegação do motorista', () => {
-  it.each(destinations.slice(1))('abre diretamente $path com sessão de motorista e conteúdo provisório', async ({ path, title }) => {
+  it.each(destinations.slice(2))('abre diretamente $path com sessão de motorista e conteúdo provisório', async ({ path, title }) => {
     const { wrapper } = await application(path)
     expect(wrapper.findComponent(DriverLayout).exists()).toBe(true)
     expect(wrapper.findComponent(StudentNavigation).exists()).toBe(false)
@@ -105,7 +105,7 @@ describe('Navegação do motorista', () => {
     expect(page.get('header p').text()).toBe('Olá!')
   })
 
-  it('identifica a consulta disponível e os dois serviços pendentes', async () => {
+  it('identifica reservas e solicitações disponíveis e a distribuição pendente', async () => {
     const { wrapper } = await application('/motorista')
     const main = wrapper.get('main')
     const cards = main.findAllComponents(BaseCard)
@@ -115,7 +115,9 @@ describe('Navegação do motorista', () => {
     expect(cards).toHaveLength(3)
     expect(cards[0]!.text()).toContain('Disponível')
     expect(cards[0]!.get('a').text()).toBe('Consultar reservas')
-    for (const card of cards.slice(1)) expect(card.text()).toContain('Em desenvolvimento')
+    expect(cards[1]!.text()).toContain('Disponível')
+    expect(cards[1]!.get('a').text()).toBe('Consultar solicitações')
+    expect(cards[2]!.text()).toContain('Em desenvolvimento')
     expect(main.findAll('table, dl, form, input, select, button')).toHaveLength(0)
     expect(main.text()).not.toMatch(/\d/)
   })
@@ -130,6 +132,8 @@ describe('Navegação do motorista', () => {
     expect(wrapper.get('main h1').text()).toBe(title)
     if (path === '/motorista/reservas') {
       expect(wrapper.find('main input[type="date"]').exists()).toBe(true)
+    } else if (path === '/motorista/advertencias') {
+      expect(wrapper.find('main select').exists()).toBe(true)
     } else {
       expect(wrapper.get('main').text()).toContain('Esta funcionalidade será implementada posteriormente.')
     }
@@ -166,13 +170,11 @@ describe('Navegação do motorista', () => {
     expect(wrapper.findAllComponents(PortalNavigation)).toHaveLength(2)
   })
 
-  it('descreve Solicitações de advertência sem formulário nem estados operacionais simulados', async () => {
+  it('abre o histórico de solicitações com estado vazio e acesso às reservas', async () => {
     const { wrapper } = await application('/motorista/advertencias')
-    expect(wrapper.get('main p').text()).toBe(
-      'Espaço para solicitar futuramente advertências para alunos com motivo e consultar suas próprias solicitações nos estados Pendente, Aprovada e Recusada.',
-    )
-    expect(wrapper.get('main').findAll('form, textarea, input, select, button, table, ul')).toHaveLength(0)
-    expect(wrapper.findComponent(BaseCard).text()).toBe('Esta funcionalidade será implementada posteriormente.')
+    expect(wrapper.get('main [role="status"]').text()).toBe('Você ainda não enviou solicitações de advertência.')
+    expect(wrapper.get('main a').attributes('href')).toBe('/motorista/reservas')
+    expect(wrapper.get('main').findAll('form, textarea, button, ul')).toHaveLength(0)
   })
 
   it('preserva título, descrição e card da página de perfil, ajustando apenas seu rótulo de navegação', async () => {
