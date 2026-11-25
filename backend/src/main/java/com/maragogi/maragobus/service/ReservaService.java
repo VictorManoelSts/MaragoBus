@@ -23,6 +23,7 @@ import com.maragogi.maragobus.repository.UsuarioRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.IncorrectResultSizeDataAccessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -51,12 +52,24 @@ public class ReservaService {
     private final DataSemFuncionamentoRepository dataSemFuncionamentoRepository;
     private final RegrasTemporaisReserva regrasTemporais;
     private final Clock clock;
+    private final EventoReservaService eventoReservaService;
 
     public ReservaService(UsuarioRepository usuarioRepository, PerfilAlunoRepository perfilAlunoRepository,
                           ReservaRepository reservaRepository, PontoEmbarqueRepository pontoEmbarqueRepository,
                           SuspensaoRepository suspensaoRepository,
                           DataSemFuncionamentoRepository dataSemFuncionamentoRepository,
                           RegrasTemporaisReserva regrasTemporais, Clock clock) {
+        this(usuarioRepository, perfilAlunoRepository, reservaRepository, pontoEmbarqueRepository,
+                suspensaoRepository, dataSemFuncionamentoRepository, regrasTemporais, clock, null);
+    }
+
+    @Autowired
+    public ReservaService(UsuarioRepository usuarioRepository, PerfilAlunoRepository perfilAlunoRepository,
+                          ReservaRepository reservaRepository, PontoEmbarqueRepository pontoEmbarqueRepository,
+                          SuspensaoRepository suspensaoRepository,
+                          DataSemFuncionamentoRepository dataSemFuncionamentoRepository,
+                          RegrasTemporaisReserva regrasTemporais, Clock clock,
+                          EventoReservaService eventoReservaService) {
         this.usuarioRepository = usuarioRepository;
         this.perfilAlunoRepository = perfilAlunoRepository;
         this.reservaRepository = reservaRepository;
@@ -65,6 +78,7 @@ public class ReservaService {
         this.dataSemFuncionamentoRepository = dataSemFuncionamentoRepository;
         this.regrasTemporais = regrasTemporais;
         this.clock = clock.withZone(ZoneId.of("America/Maceio"));
+        this.eventoReservaService = eventoReservaService;
     }
 
     // O UUID é um argumento interno, não uma autorização. Autenticação continua pendente.
@@ -92,6 +106,9 @@ public class ReservaService {
         }
 
         var salva = reservaRepository.save(construirReservaComSnapshot(aluno, perfil, ponto, dados.dataUtilizacao()));
+        if (eventoReservaService != null) {
+            eventoReservaService.registrarCriacao(salva, aluno, salva.getDataHoraReserva());
+        }
         return mapearResposta(salva);
     }
 
@@ -121,14 +138,26 @@ public class ReservaService {
         }
 
         var salva = reservaRepository.saveAndFlush(construirReservaComSnapshot(aluno, perfil, ponto, dataAlvo));
+        if (eventoReservaService != null) {
+            eventoReservaService.registrarCriacao(salva, aluno, salva.getDataHoraReserva());
+        }
         return mapearResposta(salva);
     }
 
     // A identidade autenticada deverá fornecer alunoId futuramente.
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ReservaResponse cancelar(@NotNull UUID alunoId, @NotNull UUID reservaId) {
+        return executarCancelamento(alunoId, reservaId, null);
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public ReservaResponse cancelar(@NotNull UUID alunoId, @NotNull UUID reservaId, String motivo) {
+        return executarCancelamento(alunoId, reservaId, motivo);
+    }
+
+    private ReservaResponse executarCancelamento(UUID alunoId, UUID reservaId, String motivo) {
         // Mesma ordem da criação: lock do aluno antes de consultar ou alterar reservas.
-        validarAlunoComLock(alunoId, "Somente alunos podem cancelar reservas.");
+        var aluno = validarAlunoComLock(alunoId, "Somente alunos podem cancelar reservas.");
         var reserva = reservaRepository.findById(reservaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Reserva não encontrada."));
         if (!reserva.getAluno().getId().equals(alunoId)) {
@@ -146,6 +175,9 @@ public class ReservaService {
         }
         reserva.setStatusReserva(StatusReserva.CANCELADA_PELO_ALUNO);
         reserva.setDataHoraCancelamento(agora);
+        if (eventoReservaService != null) {
+            eventoReservaService.registrarCancelamentoPeloAluno(reserva, aluno, motivo, agora);
+        }
         return mapearResposta(reserva);
     }
 
@@ -153,7 +185,7 @@ public class ReservaService {
     public ReservaResponse alterarPontoEmbarque(@NotNull UUID alunoId, @NotNull UUID reservaId,
                                                 @Valid @NotNull AtualizacaoPontoEmbarqueReservaRequest dados) {
         // Consultar a reserva somente depois de adquirir o mesmo lock da criação e do cancelamento.
-        validarAlunoComLock(alunoId, "Somente alunos podem alterar o ponto de embarque de reservas.");
+        var aluno = validarAlunoComLock(alunoId, "Somente alunos podem alterar o ponto de embarque de reservas.");
         var reserva = reservaRepository.findById(reservaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Reserva não encontrada."));
         if (!reserva.getAluno().getId().equals(alunoId)) {
@@ -162,7 +194,8 @@ public class ReservaService {
         if (reserva.getStatusReserva() != StatusReserva.CONFIRMADA) {
             throw new RegraNegocioException("Somente reservas confirmadas podem ter o ponto de embarque alterado.");
         }
-        if (reserva.getDataHoraReserva().isAfter(LocalDateTime.now(clock))) {
+        LocalDateTime agora = LocalDateTime.now(clock);
+        if (reserva.getDataHoraReserva().isAfter(agora)) {
             throw new RegraNegocioException("A reserva não pode ser alterada antes de sua criação.");
         }
         if (!regrasTemporais.permiteAlterarPontoEmbarque(reserva.getDataUtilizacao())) {
@@ -173,8 +206,14 @@ public class ReservaService {
         if (!ponto.isAtivo()) {
             throw new RegraNegocioException("O ponto de embarque está inativo.");
         }
+        String pontoAnteriorNome = reserva.getPontoEmbarqueNomeSnapshot() != null
+                ? reserva.getPontoEmbarqueNomeSnapshot()
+                : reserva.getPontoEmbarque().getNome();
         reserva.setPontoEmbarque(ponto);
         reserva.setPontoEmbarqueNomeSnapshot(ponto.getNome());
+        if (eventoReservaService != null) {
+            eventoReservaService.registrarAlteracaoPontoEmbarque(reserva, aluno, pontoAnteriorNome, ponto.getNome(), agora);
+        }
         return mapearResposta(reserva);
     }
 
