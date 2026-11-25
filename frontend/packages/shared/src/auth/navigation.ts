@@ -3,7 +3,7 @@ import type { ApplicationId } from '../types'
 
 export function profileDestination(role: AuthRole): { application: ApplicationId; path: string; origin: string } {
   if (role === 'admin') return { application: 'admin', path: '/', origin: 'http://localhost:5174' }
-  return { application: 'portal', path: role === 'driver' ? '/motorista' : '/', origin: 'http://localhost:5173' }
+  return { application: 'portal', path: role === 'driver' ? '/motorista/reservas' : '/', origin: 'http://localhost:5173' }
 }
 
 export const authNavigation = {

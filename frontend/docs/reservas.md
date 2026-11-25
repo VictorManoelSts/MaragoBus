@@ -30,6 +30,38 @@ O comprovante está disponível apenas para uma reserva própria e confirmada en
 
 O modal da página inicial e de Minhas reservas revalida sessão, status e data ao abrir. Fecha ao perder a elegibilidade por virada de dia, cancelamento ou troca de sessão. Usa a marca, a data, a faculdade, o ponto, o identificador, o status e o nome disponível da sessão. Exibe **Comprovante demonstrativo — sem validade para embarque** e não gera PDF, QR Code ou código de validação.
 
+## Consulta do motorista
+
+Em `/motorista/reservas`, o motorista seleciona a data da viagem. A página apresenta os totais de reservas confirmadas e faculdades e agrupa os alunos por faculdade. Os grupos começam recolhidos ao abrir a página ou trocar a data. Ao expandir um grupo, os alunos aparecem em ordem alfabética com o ponto de embarque da reserva. A consulta acompanha as alterações da store de reservas.
+
+O modal do aluno mostra nome, faculdade, telefone e ponto de embarque. Quando o telefone está ausente, a tela exibe **Não informado**. A ação **Solicitar advertência** abre o formulário existente, com motivo obrigatório e bloqueio de solicitações duplicadas. Ao voltar do formulário, o foco retorna à ação no modal do aluno. Ao fechar o modal do aluno, o foco retorna ao botão da lista. Após o envio, o foco vai para a confirmação, que dá acesso à página Advertências.
+
+A seção **Organização de rotas** exibe um aviso até as 11h da data selecionada em `America/Maceio`, quando as reservas encerram. Após o encerramento, a seção informa que a organização será disponibilizada em uma próxima etapa. Datas anteriores e a ausência de data têm mensagens próprias. A interface de atribuição, publicação e reabertura será entregue nas próximas etapas.
+
+### Cenário demonstrativo
+
+Abra [o endereço de ativação da demonstração](http://localhost:5173/demo-motorista) diretamente no navegador. O Portal ativa o cenário e encaminha ao login. O cenário funciona no Portal local em desenvolvimento. A ativação e a sessão do motorista demonstrativo valem para a aba e persistem ao recarregar. Se já houver uma sessão, saia pelo perfil para trocar de conta.
+
+| Motorista | CPF fictício |
+| --- | --- |
+| Motorista Demo 1 | `900.000.004-18` |
+| Motorista Demo 2 | `900.000.005-07` |
+| Motorista Demo 3 | `900.000.006-80` |
+
+A senha das três contas demonstrativas é `MotoristaDemo!24`. O Portal carrega em memória 30 reservas confirmadas para o dia civil de Maceió, distribuídas entre cinco faculdades e três pontos de embarque. Quinze alunos têm telefone fictício. Recarregar após a virada do dia gera o cenário para a nova data.
+
+Abra [o login com a demonstração desativada](http://localhost:5173/login?demo-motorista=0) na mesma aba para remover os dados e o acesso às três contas demonstrativas. Recarregar o Portal recria as stores em memória, inclusive solicitações de advertência e distribuições criadas durante a revisão.
+
+## Distribuição de faculdades
+
+A [store de distribuição](../apps/portal/src/stores/college-distributions.ts) mantém um registro compartilhado por data civil de viagem, em memória na mesma instância de Pinia. Ao trocar de conta nessa instância, os motoristas consultam e editam o mesmo registro. Recarregar a aplicação elimina a distribuição e seu histórico.
+
+- A criação e as alterações exigem sessão autenticada de motorista e ocorrem entre **11h inclusive e a meia-noite seguinte exclusive**, no dia da viagem em `America/Maceio`. Registros de dias anteriores continuam disponíveis para consulta.
+- O registro começa em **RASCUNHO**. Qualquer motorista autenticado pode atribuir uma faculdade com reservas confirmadas, remover sua atribuição ou transferi-la a outro motorista. Cada faculdade, identificada pelo nome registrado na reserva, tem no máximo um motorista na data.
+- A publicação muda o estado para **PUBLICADA** quando todas as faculdades com reservas confirmadas têm motorista. Sem reservas confirmadas, a condição é atendida. Para editar as atribuições após publicar, um motorista deve reabrir a distribuição na mesma janela, retornando-a a **RASCUNHO**.
+- Os totais são derivados reativamente da store de reservas. O cancelamento reduz o total sem mudar o estado nem as atribuições. Quando a última reserva de uma faculdade atribuída é cancelada, a atribuição continua visível com zero alunos e pode ser removida ou transferida em rascunho.
+- O histórico registra criação, atribuição, remoção, transferência, publicação e reabertura. Cada alteração efetiva guarda a identidade do motorista autor e o instante em ISO UTC. Alterações de atribuição registram a faculdade e os motoristas envolvidos.
+
 ## Pendências
 
 A política definitiva de abertura após feriados e outras interrupções permanece pendente, inclusive para bloqueios consecutivos. Autorização, persistência e integração com o backend, bem como as regras para emissão e validação de um comprovante de embarque, ainda precisam ser definidas.

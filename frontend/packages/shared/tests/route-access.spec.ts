@@ -15,7 +15,7 @@ import { mountAfterNavigation, syncSessionAccess } from '../src/auth/initializat
 import type { AuthRole, SessionUser } from '../src/auth/contracts'
 
 const students = ['/', '/reservar', '/reservas', '/notificacoes', '/perfil']
-const drivers = ['/motorista', '/motorista/faculdades', '/motorista/reservas', '/motorista/advertencias', '/motorista/perfil']
+const drivers = ['/motorista/reservas', '/motorista/advertencias', '/motorista/perfil']
 const administrators = ['/', '/alunos', '/motoristas', '/faculdades', '/pontos-embarque', '/advertencias', '/perfil', '/cursos', '/cursos-ofertados', '/reservas']
 const roles = ['student', 'driver', 'admin'] as const
 const applications: VueApp[] = []
@@ -103,7 +103,7 @@ describe.each(roles)('Permissões do perfil %s', role => {
     } else {
       expect(router.currentRoute.value.matched).toHaveLength(0)
       expect(external).toHaveBeenCalledExactlyOnceWith(role === 'student'
-        ? 'http://localhost:5173/' : 'http://localhost:5173/motorista')
+        ? 'http://localhost:5173/' : 'http://localhost:5173/motorista/reservas')
     }
   })
 
@@ -112,7 +112,7 @@ describe.each(roles)('Permissões do perfil %s', role => {
     const { router, external } = application('portal')
     await router.push('/login')
     if (role === 'admin') expect(external).toHaveBeenCalledExactlyOnceWith('http://localhost:5174/')
-    else expect(router.currentRoute.value.path).toBe(role === 'student' ? '/' : '/motorista')
+    else expect(router.currentRoute.value.path).toBe(role === 'student' ? '/' : '/motorista/reservas')
     expect(router.currentRoute.value.name).not.toBe('login')
   })
 })
@@ -121,26 +121,48 @@ describe('Compatibilidade, catálogo e fallback', () => {
   const legacy = [
     { from: '/historico', to: '/reservas', role: 'student' },
     { from: '/avisos', to: '/notificacoes', role: 'student' },
+    { from: '/motorista', to: '/motorista/reservas', role: 'driver' },
+    { from: '/motorista/faculdades', to: '/motorista/reservas', role: 'driver' },
     { from: '/motorista/passageiros', to: '/motorista/reservas', role: 'driver' },
     { from: '/motorista/resumo', to: '/motorista/reservas', role: 'driver' },
   ] as const
 
   it.each(legacy)('mantém query e hash na compatibilidade autorizada de $from', async ({ from, to, role }) => {
     cookie(role)
-    const { router } = application('portal')
+    const { router, session, external } = application('portal')
     await router.push(from + '?origem=legado#conteudo')
     expect(router.currentRoute.value.fullPath).toBe(to + '?origem=legado#conteudo')
+    expect(router.currentRoute.value.meta.allowedRoles).toEqual([role])
+    expect(session.user?.role).toBe(role)
+    expect(external).not.toHaveBeenCalled()
   })
   it.each(legacy)('bloqueia a compatibilidade $from sem sessão', async ({ from }) => {
-    const { router } = application('portal')
+    const { router, pinia, external } = application('portal')
     await router.push(from)
     expect(router.currentRoute.value.path).toBe('/login')
+    const wrapper = mount(PortalApp, { global: { plugins: [pinia, router] } })
+    await flushPromises()
+    expect(wrapper.find('nav, aside').exists()).toBe(false)
+    expect(wrapper.get('h1').text()).toBe('Bem-vindo')
+    expect(external).not.toHaveBeenCalled()
   })
   it.each(legacy)('bloqueia a compatibilidade $from para outro perfil', async ({ from, role }) => {
-    cookie(role === 'student' ? 'driver' : 'student')
-    const { router } = application('portal')
+    const otherRole = role === 'student' ? 'driver' : 'student'
+    cookie(otherRole)
+    const { router, session, external } = application('portal')
     await router.push(from)
-    expect(router.currentRoute.value.path).toBe(role === 'student' ? '/motorista' : '/')
+    expect(router.currentRoute.value.path).toBe(otherRole === 'driver' ? '/motorista/reservas' : '/')
+    expect(router.currentRoute.value.meta.allowedRoles).toEqual([otherRole])
+    expect(session.user?.role).toBe(otherRole)
+    expect(external).not.toHaveBeenCalled()
+  })
+  it.each(['/motorista', '/motorista/faculdades'])('encaminha o administrador ao Admin ao acessar %s', async path => {
+    cookie('admin')
+    const { router, session, external } = application('portal')
+    await router.push(path)
+    expect(session.user?.role).toBe('admin')
+    expect(router.currentRoute.value.matched).toHaveLength(0)
+    expect(external).toHaveBeenCalledExactlyOnceWith('http://localhost:5174/')
   })
   it.each(['portal', 'admin'] as const)('mantém Design System público apenas de desenvolvimento no %s', async target => {
     const restore = vi.spyOn(authService, 'restore')
@@ -159,7 +181,7 @@ describe('Compatibilidade, catálogo e fallback', () => {
     router.afterEach(navigations)
     await router.push('/rota-inexistente')
     if (role === 'admin') expect(external).toHaveBeenCalledExactlyOnceWith('http://localhost:5174/')
-    else expect(router.currentRoute.value.path).toBe(role === 'driver' ? '/motorista' : role ? '/' : '/login')
+    else expect(router.currentRoute.value.path).toBe(role === 'driver' ? '/motorista/reservas' : role ? '/' : '/login')
     expect(navigations).toHaveBeenCalledTimes(1)
   })
   it.each([null, ...roles])('resolve caminho inexistente no Admin sem loop com perfil %s', async role => {
@@ -168,7 +190,7 @@ describe('Compatibilidade, catálogo e fallback', () => {
     await router.push('/rota-inexistente')
     if (role === 'admin') expect(router.currentRoute.value.path).toBe('/')
     else expect(external).toHaveBeenCalledExactlyOnceWith(role === 'driver'
-      ? 'http://localhost:5173/motorista' : role ? 'http://localhost:5173/' : 'http://localhost:5173/login')
+      ? 'http://localhost:5173/motorista/reservas' : role ? 'http://localhost:5173/' : 'http://localhost:5173/login')
   })
 })
 
@@ -269,8 +291,8 @@ describe('Restauração, recarregamento e revogação', () => {
     resolve(driver)
     await mounted
     applications.push(app)
-    expect(router.currentRoute.value.path).toBe('/motorista')
-    expect(root.textContent).toContain('Painel do motorista')
+    expect(router.currentRoute.value.path).toBe('/motorista/reservas')
+    expect(root.querySelector('main h1')?.textContent).toBe('Reservas')
     expect(root.textContent).not.toContain('Acompanhe suas reservas de transporte universitário.')
   })
 

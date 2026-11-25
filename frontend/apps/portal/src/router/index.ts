@@ -3,8 +3,9 @@ import type { RouteRecordRaw, RouterHistory } from 'vue-router'
 import type { Pinia } from 'pinia'
 import type { Component } from 'vue'
 import { createAccessGuard } from '@maragobus/shared/auth/route-access'
+import { applyDriverDemoPreference } from '@maragobus/shared/auth/driver-demo'
 import { studentNavigationItems } from './student-navigation'
-import { driverFeatures, driverProfile } from './driver-navigation'
+import { driverNavigationItems } from './driver-navigation'
 
 const studentPages: Partial<Record<string, () => Promise<{ default: Component }>>> = {
   home: () => import('../pages/HomePage.vue'),
@@ -47,10 +48,11 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, allowedRoles: ['driver'] },
     component: () => import('../layouts/DriverLayout.vue'),
     children: [
-      { path: '', name: 'driver-home', component: () => import('../pages/DriverHomePage.vue') },
+      { path: '', name: 'driver-home', redirect: { name: 'driver-reservations' } },
+      { path: 'faculdades', name: 'driver-college-distribution', redirect: { name: 'driver-reservations' } },
       { path: 'passageiros', name: 'driver-passengers', redirect: { name: 'driver-reservations' } },
       { path: 'resumo', name: 'driver-summary', redirect: { name: 'driver-reservations' } },
-      ...[...driverFeatures, driverProfile].map(item => {
+      ...driverNavigationItems.map(item => {
         const page = driverPages[item.name]
         return {
           path: item.path.slice('/motorista/'.length),
@@ -63,6 +65,13 @@ const routes: RouteRecordRaw[] = [
   },
 ]
 if (import.meta.env.DEV) {
+  routes.push({
+    path: '/demo-motorista',
+    redirect: to => {
+      applyDriverDemoPreference(to.path)
+      return { name: 'login' }
+    },
+  })
   routes.push({
     path: '/design-system',
     name: 'design-system',

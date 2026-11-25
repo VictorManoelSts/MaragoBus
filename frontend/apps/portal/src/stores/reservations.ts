@@ -1,15 +1,18 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+import { driverDemoEnabled } from '@maragobus/shared/auth/driver-demo'
 import { useSessionStore } from '@maragobus/shared/auth/session'
 import type { ReservationAvailability, TransportClosure, TravelDate } from '../types/reservation-availability'
 import type { ReservationFormContext } from '../types/reservation-form'
 import type { StudentHomeSummary, StudentReservationSummary } from '../types/student-home'
 import { getCancellationDeadline, getReservationAvailability } from '../utils/reservation-availability'
 import { getReceiptAvailability } from '../utils/reservation-receipt'
+import { getDriverDemoReservations } from '../mocks/driver-demo-reservations'
 
 type SimulatedReservation = Omit<StudentReservationSummary, 'status'> & {
   studentId: string
   studentName?: string
+  studentPhone?: string
   boardingPointId: string
   confirmedAt: string
 } & ({ status: 'confirmed'; cancelledAt?: never } | { status: 'cancelled'; cancelledAt: string })
@@ -23,7 +26,8 @@ interface ConfirmationRequest {
 
 export const useReservationsStore = defineStore('reservations', () => {
   const session = useSessionStore()
-  const reservations = ref<SimulatedReservation[]>([])
+  const reservations = ref<SimulatedReservation[]>(import.meta.env.DEV && !import.meta.env.PROD && driverDemoEnabled()
+    ? getDriverDemoReservations(new Date()) : [])
   const confirming = ref(false)
   const studentId = computed(() =>
     session.authenticated && session.user?.role === 'student' ? session.user.id : undefined)
@@ -47,8 +51,18 @@ export const useReservationsStore = defineStore('reservations', () => {
 
     return reservations.value
       .filter(item => item.travelDate === travelDate && item.status === 'confirmed')
-      .map(({ id, studentName, college, boardingPointId, boardingPoint }) =>
-        Object.freeze({ id, studentName, college, boardingPointId, boardingPoint }))
+      .map(({ id, studentName, studentPhone, college, boardingPointId, boardingPoint }) =>
+        Object.freeze({ id, studentName, college, boardingPointId, boardingPoint, ...(studentPhone && { studentPhone }) }))
+  }
+
+  function countConfirmedByCollege(travelDate: TravelDate) {
+    const counts = new Map<string, number>()
+    for (const reservation of reservations.value) {
+      if (reservation.travelDate === travelDate && reservation.status === 'confirmed') {
+        counts.set(reservation.college, (counts.get(reservation.college) ?? 0) + 1)
+      }
+    }
+    return counts
   }
 
   function findDriverReservationForWarning(id: string) {
@@ -137,7 +151,7 @@ export const useReservationsStore = defineStore('reservations', () => {
 
   return {
     studentReservations, confirming, studentId, findReservation, findConfirmed, listDriverReservations,
-    findDriverReservationForWarning,
+    findDriverReservationForWarning, countConfirmedByCollege,
     getHomeSummary, getReceiptReservation, validateConfirmation, confirm, cancel,
   }
 })

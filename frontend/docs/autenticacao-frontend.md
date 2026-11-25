@@ -20,7 +20,7 @@ Os guards compartilhados usam os metadados de acesso da rota e restauram a sess�
 | Perfil | Área permitida | Destino inicial |
 | --- | --- | --- |
 | Aluno (`student`) | Rotas do aluno no Portal | `/` no Portal |
-| Motorista (`driver`) | Rotas do motorista no Portal | `/motorista` no Portal |
+| Motorista (`driver`) | Rotas do motorista no Portal | `/motorista/reservas` no Portal |
 | Administrador (`admin`) | Rotas do Admin | `/` no Admin |
 
 O catálogo `/design-system` é público em desenvolvimento. Os redirects de compatibilidade passam pelo guard do destino final.

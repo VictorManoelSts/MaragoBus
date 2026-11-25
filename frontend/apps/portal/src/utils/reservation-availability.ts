@@ -30,6 +30,10 @@ export function getCancellationDeadline(date: TravelDate): Date {
   return transportInstant(date, '16')
 }
 
+export function getReservationClosingTime(date: TravelDate): Date {
+  return transportInstant(date, '11')
+}
+
 function civilDate(date: TravelDate): Date {
   return new Date(`${date}T00:00:00Z`)
 }
@@ -61,7 +65,7 @@ export function getReservationWindow(travelDate: TravelDate): ReservationWindow 
   return {
     travelDate,
     opensAt: transportInstant(adjacentRegularTravelDay(travelDate, -1), '17'),
-    closesAt: transportInstant(travelDate, '11'),
+    closesAt: getReservationClosingTime(travelDate),
   }
 }
 

@@ -1,5 +1,6 @@
 import { AuthError } from './contracts'
 import type { AuthService } from './contracts'
+import { clearDriverDemoSession } from './driver-demo'
 
 export const mockAuthAvailable = import.meta.env.DEV && !import.meta.env.PROD
   && typeof window !== 'undefined' && window.location.hostname === 'localhost'
@@ -15,7 +16,7 @@ export const authService: AuthService = {
     return (await import('./mock')).mockAuthService.restore()
   },
   logout() {
-    if (mockAuthAvailable) {
+    if (mockAuthAvailable && !clearDriverDemoSession()) {
       document.cookie = 'maragobus_mock_session=; Path=/; SameSite=Lax; Max-Age=0'
     }
   },

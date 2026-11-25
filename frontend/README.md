@@ -101,15 +101,16 @@ As configurações Vite, os HTMLs de entrada e os arquivos TypeScript complement
 | Área | Destinos |
 | --- | --- |
 | Aluno | `/`, `/reservar`, `/reservas`, `/notificacoes`, `/perfil` |
-| Motorista | `/motorista`, `/motorista/reservas`, `/motorista/advertencias`, `/motorista/perfil` |
+| Motorista | `/motorista/reservas`, `/motorista/advertencias`, `/motorista/perfil` |
 | Admin | Principal: visão geral, alunos, motoristas, faculdades, pontos de embarque, solicitações de advertência e perfil. Complementar: cursos, cursos ofertados e reservas. |
 
 No Portal, `/historico` redireciona para `/reservas`, `/avisos` para
-`/notificacoes` e `/motorista/passageiros` e `/motorista/resumo`
+`/notificacoes`. O Portal também redireciona `/motorista`, `/motorista/faculdades`,
+`/motorista/passageiros` e `/motorista/resumo`
 para `/motorista/reservas`. Os guards avaliam o destino final. Os redirecionamentos
 de compatibilidade autorizados preservam query e hash.
 
-O painel do motorista também dá acesso à página informativa `/motorista/faculdades`.
+O motorista entra diretamente em Reservas após o login. Veja o [fluxo de consulta e advertências](docs/reservas.md#consulta-do-motorista).
 
 ## Pacote compartilhado
 

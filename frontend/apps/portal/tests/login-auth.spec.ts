@@ -5,6 +5,7 @@ import { createMemoryHistory } from 'vue-router'
 import App from '../src/App.vue'
 import { createPortalRouter } from '../src/router'
 import { authService } from '@maragobus/shared/auth/service'
+import { applyDriverDemoPreference } from '@maragobus/shared/auth/driver-demo'
 import { authNavigation } from '@maragobus/shared/auth/navigation'
 import { useSessionStore } from '@maragobus/shared/auth/session'
 import { AuthError } from '@maragobus/shared/auth/contracts'
@@ -16,16 +17,33 @@ afterEach(() => {
   authService.logout()
 })
 
-async function application() {
+async function application(path = '/login') {
   const pinia = createPinia()
   const router = createPortalRouter(createMemoryHistory(), pinia)
-  await router.push('/login')
+  await router.push(path)
   const wrapper = mount(App, { attachTo: document.body, global: { plugins: [pinia, router] } })
   await flushPromises()
   return { wrapper, router, session: useSessionStore(pinia) }
 }
 
 describe('Integração do login com autenticação de desenvolvimento', () => {
+  it('entra pelo formulário com a conta demonstrativa após ativar pelo endereço do Portal', async () => {
+    try {
+      const { wrapper, router, session } = await application('/demo-motorista')
+      expect(router.currentRoute.value.path).toBe('/login')
+      await wrapper.get('#login-cpf').setValue('900.000.004-18')
+      await wrapper.get('#login-password').setValue('MotoristaDemo!24')
+      await wrapper.get('form').trigger('submit')
+      await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/motorista/reservas'))
+      expect(session.user?.id).toBe('driver-demo-1')
+      expect(wrapper.findAll('main [role="status"] dd').map(value => value.text())).toEqual(['30', '5'])
+    } finally {
+      history.replaceState(null, '', '/login?demo-motorista=0')
+      applyDriverDemoPreference()
+      history.replaceState(null, '', '/')
+    }
+  })
+
   it('não chama o serviço antes de validar os campos', async () => {
     const login = vi.spyOn(authService, 'login')
     const { wrapper } = await application()
@@ -75,7 +93,7 @@ describe('Integração do login com autenticação de desenvolvimento', () => {
 
   it.each([
     { cpf: '90000000175', password: 'AlunoTeste!53', role: 'student', destination: '/' },
-    { cpf: '90000000256', password: 'MotoristaTeste!53', role: 'driver', destination: '/motorista' },
+    { cpf: '90000000256', password: 'MotoristaTeste!53', role: 'driver', destination: '/motorista/reservas' },
     { cpf: '90000000337', password: 'AdminTeste!53', role: 'admin', destination: 'http://localhost:5174/' },
   ])('autentica $role com CPF gerado para teste e navega ao destino correto', async credential => {
     expect(cpfError(credential.cpf)).toBe('')

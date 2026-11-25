@@ -133,7 +133,7 @@ describe('Store Pinia e persistência local compartilhada', () => {
 })
 
 describe('Navegação após login e logout', () => {
-  it.each([['student', '/'], ['driver', '/motorista']] as const)('usa Vue Router para %s', async (role, path) => {
+  it.each([['student', '/'], ['driver', '/motorista/reservas']] as const)('usa Vue Router para %s', async (role, path) => {
     const router = { replace: vi.fn().mockResolvedValue(undefined) }
     await authNavigation.afterLogin(role, router)
     expect(router.replace).toHaveBeenCalledWith(path)

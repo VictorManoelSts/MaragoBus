@@ -4,19 +4,16 @@ import { createMemoryHistory } from 'vue-router'
 import { BaseCard } from '@maragobus/shared'
 import App from '../src/App.vue'
 import DriverLayout from '../src/layouts/DriverLayout.vue'
-import DriverHomePage from '../src/pages/DriverHomePage.vue'
 import StudentNavigation from '../src/components/StudentNavigation.vue'
 import PortalNavigation from '../src/components/PortalNavigation.vue'
 import { createPortalRouter } from '../src/router'
 import { setMockSession } from '../../../packages/shared/tests/auth-fixture'
-import { useSessionStore } from '@maragobus/shared/auth/session'
 
 const destinations = [
-  { path: '/motorista/reservas', label: 'Reservas', title: 'Reservas confirmadas' },
-  { path: '/motorista/advertencias', label: 'Solicitações de advertência', title: 'Solicitações de advertência' },
+  { path: '/motorista/reservas', label: 'Reservas', title: 'Reservas' },
+  { path: '/motorista/advertencias', label: 'Advertências', title: 'Solicitações de advertência' },
   { path: '/motorista/perfil', label: 'Meu perfil', title: 'Perfil do motorista' },
 ]
-const menuDestinations = [{ path: '/motorista', label: 'Início', title: 'Painel do motorista' }, ...destinations]
 
 async function application(path: string) {
   await setMockSession('driver')
@@ -45,21 +42,21 @@ describe('Navegação do motorista', () => {
   })
 
   describe.each(['desktop', 'mobile'] as const)('%s', variant => {
-    it('mostra os quatro destinos e os ícones com navegação identificada', async () => {
+    it('mostra os três destinos e os ícones com navegação identificada', async () => {
       const { wrapper } = await application('/motorista/reservas')
       const nav = wrapper.findAllComponents(PortalNavigation).find(component => component.props('variant') === variant)!
       expect(nav.element.tagName).toBe('NAV')
       expect(nav.attributes('aria-label')).toBe('Navegação do motorista')
       expect(nav.findAll('a').map(link => ({ path: link.attributes('href'), label: link.text() })))
-        .toEqual(menuDestinations.map(({ path, label }) => ({ path, label })))
-      expect(nav.findAll('svg')).toHaveLength(4)
+        .toEqual(destinations.map(({ path, label }) => ({ path, label })))
+      expect(nav.findAll('svg')).toHaveLength(3)
       for (const link of nav.findAll('a')) {
         expect(link.get('svg').attributes('aria-hidden')).toBe('true')
         expect(link.attributes('tabindex')).toBeUndefined()
       }
     })
 
-    it.each(menuDestinations)('destaca somente $label em $path', async ({ path }) => {
+    it.each(destinations)('destaca somente $label em $path', async ({ path }) => {
       const { wrapper } = await application(path)
       const nav = wrapper.findAllComponents(PortalNavigation).find(component => component.props('variant') === variant)!
       expect(nav.findAll('a[aria-current="page"]')).toHaveLength(1)
@@ -67,10 +64,10 @@ describe('Navegação do motorista', () => {
       expect(nav.get('a[aria-current="page"]').classes()).toContain('router-link-exact-active')
     })
 
-    it('navega entre as quatro páginas pelos RouterLinks', async () => {
+    it('navega entre as três páginas pelos RouterLinks', async () => {
       const { wrapper, router } = await application('/motorista/perfil')
       const nav = wrapper.findAllComponents(PortalNavigation).find(component => component.props('variant') === variant)!
-      for (const { path, title } of menuDestinations) {
+      for (const { path, title } of destinations) {
         await nav.get('a[href="' + path + '"]').trigger('click')
         await flushPromises()
         expect(router.currentRoute.value.path).toBe(path)
@@ -79,64 +76,15 @@ describe('Navegação do motorista', () => {
     })
   })
 
-  it('reutiliza as regiões responsivas e distribui quatro colunas no mobile', async () => {
+  it('reutiliza as regiões responsivas e distribui três colunas no mobile', async () => {
     const { wrapper } = await application('/motorista/reservas')
     const [desktop, mobile] = wrapper.findAllComponents(PortalNavigation)
     expect([...desktop!.element.parentElement!.classList]).toEqual(expect.arrayContaining(['hidden', 'lg:block']))
     expect([...mobile!.element.parentElement!.classList]).toEqual(expect.arrayContaining(['sticky', 'bottom-0', 'lg:hidden']))
-    expect(mobile!.get('ul').element.style.gridTemplateColumns).toMatch(/^repeat\(4, minmax\(0(?:px)?, 1fr\)\)$/)
+    expect(mobile!.get('ul').element.style.gridTemplateColumns).toMatch(/^repeat\(3, minmax\(0(?:px)?, 1fr\)\)$/)
     expect(mobile!.classes()).toContain('portal-navigation--mobile')
     expect(mobile!.get('a').classes()).toContain('min-h-16')
     expect(wrapper.get('main').element.parentElement!.nextElementSibling).toBe(mobile!.element.parentElement)
-  })
-
-  it('exibe o painel e saúda o motorista autenticado', async () => {
-    const { wrapper, router } = await application('/motorista')
-    expect(router.currentRoute.value.name).toBe('driver-home')
-    expect(wrapper.get('main h1').text()).toBe('Painel do motorista')
-    expect(wrapper.get('main header p').text()).toBe('Olá, Motorista de Teste!')
-  })
-
-  it('exibe saudação genérica quando o nome está vazio', async () => {
-    const { router } = await application('/motorista')
-    const session = useSessionStore()
-    session.user = { ...session.user!, name: '   ' }
-    const page = mount(DriverHomePage, { global: { plugins: [router] } })
-    expect(page.get('header p').text()).toBe('Olá!')
-  })
-
-  it('identifica reservas e solicitações disponíveis e a distribuição pendente', async () => {
-    const { wrapper } = await application('/motorista')
-    const main = wrapper.get('main')
-    const cards = main.findAllComponents(BaseCard)
-    expect(main.findAll('h3').map(heading => heading.text())).toEqual([
-      'Consultar reservas dos alunos', 'Solicitar advertências', 'Consultar distribuição de faculdades',
-    ])
-    expect(cards).toHaveLength(3)
-    expect(cards[0]!.text()).toContain('Disponível')
-    expect(cards[0]!.get('a').text()).toBe('Consultar reservas')
-    expect(cards[1]!.text()).toContain('Disponível')
-    expect(cards[1]!.get('a').text()).toBe('Consultar solicitações')
-    expect(cards[2]!.text()).toContain('Em desenvolvimento')
-    expect(main.findAll('table, dl, form, input, select, button')).toHaveLength(0)
-    expect(main.text()).not.toMatch(/\d/)
-  })
-
-  it.each([...destinations.slice(0, 2), {
-    path: '/motorista/faculdades', title: 'Distribuição de faculdades',
-  }])('abre as informações de $title pelo painel', async ({ path, title }) => {
-    const { wrapper, router } = await application('/motorista')
-    await wrapper.get(`main a[href="${path}"]`).trigger('click')
-    await flushPromises()
-    expect(router.currentRoute.value.path).toBe(path)
-    expect(wrapper.get('main h1').text()).toBe(title)
-    if (path === '/motorista/reservas') {
-      expect(wrapper.find('main input[type="date"]').exists()).toBe(true)
-    } else if (path === '/motorista/advertencias') {
-      expect(wrapper.find('main select').exists()).toBe(true)
-    } else {
-      expect(wrapper.get('main').text()).toContain('Esta funcionalidade será implementada posteriormente.')
-    }
   })
 
   it('preserva as rotas e os cinco destinos do aluno ao trocar para sessão de aluno', async () => {
@@ -190,21 +138,21 @@ describe('Navegação do motorista', () => {
   it('mantém rótulos completos com quebra de linha disponível no mobile', async () => {
     const { wrapper } = await application('/motorista/advertencias')
     const nav = wrapper.findAllComponents(PortalNavigation).find(component => component.props('variant') === 'mobile')!
-    expect(nav.text()).toContain('Solicitações de advertência')
+    expect(nav.text()).toContain('Advertências')
     for (const label of nav.findAll('a span')) expect(label.classes()).toContain('wrap-anywhere')
     for (const item of nav.findAll('li')) expect(item.classes()).toContain('min-w-0')
   })
 })
 
 describe('Compatibilidade das rotas do motorista', () => {
-  const legacy = ['/motorista/passageiros', '/motorista/resumo']
+  const legacy = ['/motorista', '/motorista/faculdades', '/motorista/passageiros', '/motorista/resumo']
 
   it.each(legacy)('redireciona %s para Reservas, sem acrescentar destinos aos menus', async path => {
     const { wrapper, router } = await application(path)
     expect(router.currentRoute.value.path).toBe('/motorista/reservas')
-    expect(wrapper.get('main h1').text()).toBe('Reservas confirmadas')
+    expect(wrapper.get('main h1').text()).toBe('Reservas')
     for (const nav of wrapper.findAllComponents(PortalNavigation)) {
-      expect(nav.findAll('a')).toHaveLength(4)
+      expect(nav.findAll('a')).toHaveLength(3)
       expect(nav.get('a[aria-current="page"]').attributes('href')).toBe('/motorista/reservas')
       expect(nav.find('a[href="/motorista/passageiros"]').exists()).toBe(false)
       expect(nav.find('a[href="/motorista/resumo"]').exists()).toBe(false)
@@ -218,9 +166,9 @@ describe('Compatibilidade das rotas do motorista', () => {
     expect(router.currentRoute.value.hash).toBe('#conteudo')
   })
 
-  it('mantém os links nomeados de Passageiros, Resumo e Perfil funcionando', async () => {
+  it('mantém os links nomeados antigos e o perfil funcionando', async () => {
     const { router } = await application('/motorista/perfil')
-    for (const name of ['driver-passengers', 'driver-summary']) {
+    for (const name of ['driver-home', 'driver-college-distribution', 'driver-passengers', 'driver-summary']) {
       await router.push({ name })
       expect(router.currentRoute.value.path).toBe('/motorista/reservas')
     }
