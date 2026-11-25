@@ -9,6 +9,8 @@ import com.maragogi.maragobus.exception.RegraNegocioException;
 import com.maragogi.maragobus.repository.PontoEmbarqueRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -46,6 +48,13 @@ public class PontoEmbarqueService {
     @Transactional(readOnly = true)
     public List<PontoEmbarqueResponse> listarAtivos() {
         return pontoEmbarqueRepository.findByAtivoTrue().stream().map(this::converterParaResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<PontoEmbarqueResponse> listar(@NotNull Pageable pagina, boolean somenteAtivos) {
+        var pontos = somenteAtivos ? pontoEmbarqueRepository.findByAtivoTrue(pagina)
+                : pontoEmbarqueRepository.findAll(pagina);
+        return pontos.map(this::converterParaResponse);
     }
 
     @Transactional

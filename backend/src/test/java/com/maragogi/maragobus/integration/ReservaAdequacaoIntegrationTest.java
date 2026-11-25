@@ -1,11 +1,15 @@
 package com.maragogi.maragobus.integration;
 
 import com.maragogi.maragobus.entity.*;
+import com.maragogi.maragobus.dto.pontoembarque.AtualizacaoPontoEmbarqueRequest;
+import com.maragogi.maragobus.dto.pontoembarque.CadastroPontoEmbarqueRequest;
+import com.maragogi.maragobus.dto.reserva.AtualizacaoPontoEmbarqueReservaRequest;
 import com.maragogi.maragobus.enums.ModalidadeEnsino;
 import com.maragogi.maragobus.enums.StatusReserva;
 import com.maragogi.maragobus.enums.TipoUsuario;
 import com.maragogi.maragobus.exception.RegraNegocioException;
 import com.maragogi.maragobus.repository.*;
+import com.maragogi.maragobus.service.PontoEmbarqueService;
 import com.maragogi.maragobus.service.ReservaService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +21,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -72,6 +78,7 @@ class ReservaAdequacaoIntegrationTest {
 
     @Autowired RelogioControlado relogio;
     @Autowired ReservaService reservaService;
+    @Autowired PontoEmbarqueService pontoService;
     @Autowired LeituraAvisoAlunoRepository leituras;
     @Autowired AvisoAdministrativoRepository avisos;
     @Autowired HistoricoDistribuicaoTransporteRepository historicoDistribuicoes;
@@ -190,6 +197,51 @@ class ReservaAdequacaoIntegrationTest {
         // 4. Fora de qualquer janela (13:00 do mesmo dia) deve rejeitar
         relogio.definir("2026-10-14T13:00:00");
         assertThrows(RegraNegocioException.class, () -> reservaService.reservarProximaDataDisponivel(alunoId));
+    }
+
+    @Test
+    void devePreservarPerfilEReservasAoDesativarEReativarPonto() {
+        var cancelada = reservaService.reservarProximaDataDisponivel(alunoId);
+        reservaService.cancelar(alunoId, cancelada.id());
+        var confirmada = reservaService.reservarProximaDataDisponivel(alunoId);
+        var alternativa = pontoService.cadastrar(new CadastroPontoEmbarqueRequest("Terminal", "Rua Sul"));
+        var pagina = PageRequest.of(0, 1, Sort.by("nome", "id"));
+
+        pontoService.desativar(pontoId);
+        pontoService.atualizarDados(pontoId, new AtualizacaoPontoEmbarqueRequest("Praça Renomeada", "Rua Norte"));
+
+        assertFalse(pontoService.buscarPorId(pontoId).ativo());
+        assertEquals(pontoId, pontoService.listar(pagina, false).getContent().getFirst().id());
+        var ativos = pontoService.listar(pagina, true);
+        assertEquals(1, ativos.getTotalElements());
+        assertEquals(alternativa.id(), ativos.getContent().getFirst().id());
+        transacao.executeWithoutResult(status -> {
+            assertEquals(pontoId, perfis.findByUsuarioId(alunoId).orElseThrow().getPontoEmbarquePadrao().getId());
+            var reserva = reservas.findById(confirmada.id()).orElseThrow();
+            assertEquals(pontoId, reserva.getPontoEmbarque().getId());
+            assertEquals("Praça Central", reserva.getPontoEmbarqueNomeSnapshot());
+            assertEquals(StatusReserva.CONFIRMADA, reserva.getStatusReserva());
+        });
+        var erro = assertThrows(RegraNegocioException.class,
+                () -> reservaService.reservarProximaDataDisponivel(alunoId));
+        assertEquals("O ponto de embarque está inativo.", erro.getMessage());
+        assertThrows(RegraNegocioException.class, () -> reservaService.alterarPontoEmbarque(
+                alunoId, confirmada.id(), new AtualizacaoPontoEmbarqueReservaRequest(pontoId)));
+
+        var regularizada = reservaService.alterarPontoEmbarque(
+                alunoId, confirmada.id(), new AtualizacaoPontoEmbarqueReservaRequest(alternativa.id()));
+        assertEquals(alternativa.id(), regularizada.pontoEmbarqueId());
+
+        pontoService.reativar(pontoId);
+        assertTrue(pontoService.buscarPorId(pontoId).ativo());
+        transacao.executeWithoutResult(status -> {
+            assertEquals(pontoId, perfis.findByUsuarioId(alunoId).orElseThrow().getPontoEmbarquePadrao().getId());
+            assertEquals(alternativa.id(), reservas.findById(confirmada.id()).orElseThrow().getPontoEmbarque().getId());
+            var anterior = reservas.findById(cancelada.id()).orElseThrow();
+            assertEquals(StatusReserva.CANCELADA_PELO_ALUNO, anterior.getStatusReserva());
+            assertEquals(pontoId, anterior.getPontoEmbarque().getId());
+            assertEquals("Praça Central", anterior.getPontoEmbarqueNomeSnapshot());
+        });
     }
 
     @Test

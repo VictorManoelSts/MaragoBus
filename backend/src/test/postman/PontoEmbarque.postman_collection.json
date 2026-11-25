@@ -1,0 +1,547 @@
+{
+  "info": {
+    "name": "MaragoBus | Ponto de embarque local",
+    "description": "Use o perfil curso-local com um PostgreSQL descartável e vazio. Informe baseUrl (loopback), usuario e senha de uma conta fictícia configurada no Spring Security com senha BCrypt. Execute com redirecionamentos desabilitados.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "basic",
+    "basic": [
+      {
+        "key": "username",
+        "value": "{{usuario}}",
+        "type": "string"
+      },
+      {
+        "key": "password",
+        "value": "{{senha}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:18089"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const baseUrl = pm.variables.get('baseUrl');",
+          "if (!/^http:\\/\\/(localhost|127\\.0\\.0\\.1)(:\\d+)?$/.test(baseUrl)) pm.execution.skipRequest();"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Acesso anônimo",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/pontos-embarque",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sessão e CSRF",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/login",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "Accept",
+            "value": "text/html"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "const token = pm.response.text().match(/<input\\b(?=[^>]*\\bname=\"_csrf\")[^>]*\\bvalue=\"([^\"]+)\"/);",
+              "pm.test('Token CSRF disponível', () => pm.expect(token).to.be.an('array'));",
+              "if (token) pm.collectionVariables.set('csrfToken', token[1]);",
+              "pm.collectionVariables.set('runId', pm.variables.replaceIn('{{$guid}}'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Escrita sem CSRF",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/pontos-embarque",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"nome\":\"Ponto fictício\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401 sem token CSRF na autenticação Basic\", () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cadastro inválido",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/pontos-embarque",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"nome\":\" \"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cadastro",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/pontos-embarque",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"nome\":\"Ponto fictício {{runId}}\",\"descricao\":\"Ao lado da praça\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "const ponto = pm.response.json();",
+              "pm.collectionVariables.set('pontoId', ponto.id);",
+              "pm.test('UUID, Location e dados do ponto', () => {",
+              "  pm.expect(ponto.id).to.match(/^[0-9a-f-]{36}$/i);",
+              "  pm.expect(pm.response.headers.get('Location')).to.eql(pm.variables.replaceIn('{{baseUrl}}/api/pontos-embarque/') + ponto.id);",
+              "  pm.expect(ponto.nome).to.eql(pm.variables.replaceIn('Ponto fictício {{runId}}'));",
+              "  pm.expect(ponto.descricao).to.eql('Ao lado da praça');",
+              "  pm.expect(ponto.ativo).to.eql(true);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Nome duplicado",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/pontos-embarque",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"nome\":\" Ponto fictício {{runId}} \",\"descricao\":\"Ao lado da praça\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Listagem paginada",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/pontos-embarque?page=0&size=1",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "const pagina = pm.response.json();",
+              "pm.test('Página e ponto cadastrado', () => {",
+              "  pm.expect(pagina.page).to.include({number: 0, size: 1, totalElements: 1, totalPages: 1});",
+              "  pm.expect(pagina.content[0].id).to.eql(pm.variables.get('pontoId'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Consulta por UUID",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/pontos-embarque/{{pontoId}}",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test('Mesmo UUID e ponto ativo', () => {",
+              "  pm.expect(pm.response.json()).to.include({id: pm.variables.get('pontoId'), ativo: true});",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Atualização",
+      "request": {
+        "method": "PUT",
+        "url": "{{baseUrl}}/api/pontos-embarque/{{pontoId}}",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"nome\":\"Parada fictícia {{runId}}\",\"descricao\":\"Rua Norte\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test('Dados atualizados com mesmo UUID', () => {",
+              "  pm.expect(pm.response.json()).to.include({id: pm.variables.get('pontoId'), nome: pm.variables.replaceIn('Parada fictícia {{runId}}'), descricao: 'Rua Norte', ativo: true});",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Desativação",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/pontos-embarque/{{pontoId}}",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 204\", () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Consulta de ponto inativo",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/pontos-embarque/{{pontoId}}",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test('Ponto inativo preservado', () => pm.expect(pm.response.json()).to.include({id: pm.variables.get('pontoId'), ativo: false}));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Filtro exclui inativos",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/pontos-embarque?somenteAtivos=true",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test('Lista de ativos vazia', () => pm.expect(pm.response.json().content).to.be.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reativação",
+      "request": {
+        "method": "PUT",
+        "url": "{{baseUrl}}/api/pontos-embarque/{{pontoId}}/reativacao",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 204\", () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Filtro inclui reativado",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/pontos-embarque?somenteAtivos=true",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test('Ponto reativado nos resultados', () => pm.expect(pm.response.json().content[0]).to.include({id: pm.variables.get('pontoId'), ativo: true}));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "UUID inválido",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/pontos-embarque/invalido",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "UUID inexistente",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/pontos-embarque/00000000-0000-0000-0000-000000000000",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Paginação inválida",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/pontos-embarque?page=-1&size=101",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
