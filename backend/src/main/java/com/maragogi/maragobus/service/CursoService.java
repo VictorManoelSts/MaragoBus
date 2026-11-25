@@ -9,6 +9,8 @@ import com.maragogi.maragobus.exception.RegraNegocioException;
 import com.maragogi.maragobus.repository.CursoRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -46,6 +48,14 @@ public class CursoService {
     @Transactional(readOnly = true)
     public List<CursoResponse> listarAtivos() {
         return cursoRepository.findAllByAtivoTrue().stream().map(this::converterParaResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CursoResponse> listar(@NotNull Pageable pagina, boolean somenteAtivos) {
+        Page<Curso> cursos = somenteAtivos
+                ? cursoRepository.findAllByAtivoTrue(pagina)
+                : cursoRepository.findAll(pagina);
+        return cursos.map(this::converterParaResponse);
     }
 
     @Transactional
