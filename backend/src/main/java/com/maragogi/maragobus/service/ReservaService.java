@@ -89,6 +89,8 @@ public class ReservaService {
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Perfil de aluno não encontrado."));
         var ponto = validarPontoPadrao(perfil);
 
+        // Mesma ordem da suspensão: aluno, calendário e só então operações com reservas.
+        dataSemFuncionamentoRepository.bloquearCalendarioParaLeitura();
         Set<LocalDate> datasBloqueadas = dataSemFuncionamentoRepository.findDatasNoPeriodo(
                 dados.dataUtilizacao().minusDays(30), dados.dataUtilizacao());
         if (datasBloqueadas.contains(dados.dataUtilizacao())) {
@@ -123,6 +125,7 @@ public class ReservaService {
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Perfil de aluno não encontrado."));
         var ponto = validarPontoPadrao(perfil);
 
+        dataSemFuncionamentoRepository.bloquearCalendarioParaLeitura();
         LocalDate hoje = LocalDate.now(clock);
         Set<LocalDate> datasBloqueadas = dataSemFuncionamentoRepository.findDatasAPartirDe(hoje);
         LocalDate dataAlvo = calcularDataAbertaNoServidor(hoje, datasBloqueadas);

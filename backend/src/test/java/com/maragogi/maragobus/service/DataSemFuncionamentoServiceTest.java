@@ -1,7 +1,9 @@
 package com.maragogi.maragobus.integration;
 
 import com.maragogi.maragobus.dto.datasemfuncionamento.CadastroDataSemFuncionamentoRequest;
+import com.maragogi.maragobus.dto.datasemfuncionamento.DataSemFuncionamentoResponse;
 import com.maragogi.maragobus.dto.reserva.CriacaoReservaRequest;
+import com.maragogi.maragobus.dto.reserva.ReservaResponse;
 import com.maragogi.maragobus.dto.solicitacaoadvertencia.AprovacaoSolicitacaoAdvertenciaRequest;
 import com.maragogi.maragobus.dto.suspensao.DefinicaoDuracaoSuspensaoRequest;
 import com.maragogi.maragobus.entity.*;
@@ -15,6 +17,8 @@ import com.maragogi.maragobus.service.SuspensaoService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -34,6 +38,10 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import javax.sql.DataSource;
 import java.time.*;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -246,6 +254,117 @@ class DataSemFuncionamentoIntegrationTest {
                 () -> reservaService.cadastrar(alunoId, new CriacaoReservaRequest(quarta)));
         assertEquals("Não há funcionamento do transporte na data informada.", erro.getMessage());
     }
+
+    @ParameterizedTest
+    @CsvSource({"false, false", "true, false", "false, true", "true, true"})
+    void deveCancelarReservaConcorrenteSomenteSeCriacaoConfirmar(boolean dataAutomatica, boolean rollback)
+            throws Exception {
+        relogio.definir("2026-10-14T17:00:00");
+        LocalDate data = LocalDate.of(2026, 10, 15);
+        var bloqueio = new CadastroDataSemFuncionamentoRequest(data, "Manutencao");
+
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            var reserva = transacao.execute(status -> {
+                var criada = reservar(dataAutomatica, data);
+                reservas.flush();
+                int pid = jdbc.queryForObject("select pg_backend_pid()", Integer.class);
+                var bloqueioConcorrente = executor.submit(() -> dataSemFuncionamentoService.cadastrar(adminId, bloqueio));
+                boolean aguardou = aguardarLockCalendario(pid, bloqueioConcorrente);
+                if (rollback) {
+                    status.setRollbackOnly();
+                }
+                return new ReservaComBloqueio(criada.id(), bloqueioConcorrente, aguardou);
+            });
+
+            assertEquals(rollback ? 0 : 1, reserva.bloqueio().get(10, TimeUnit.SECONDS).reservasCanceladas());
+            assertTrue(reserva.aguardou(), "A alteração deve aguardar o lock compartilhado da reserva.");
+            assertTrue(datasSemFuncionamento.existsByData(data));
+            var historico = eventos.findByReservaIdOrderByDataHoraEventoAscIdAsc(reserva.id());
+            if (rollback) {
+                assertFalse(reservas.existsById(reserva.id()));
+                assertTrue(historico.isEmpty());
+            } else {
+                assertEquals(StatusReserva.CANCELADA_SEM_FUNCIONAMENTO,
+                        reservas.findById(reserva.id()).orElseThrow().getStatusReserva());
+                assertEquals(2, historico.size());
+                assertEquals(1, historico.stream().filter(e -> e.getTipoEvento() == TipoEventoReserva.CRIACAO).count());
+                assertEquals(1, historico.stream()
+                        .filter(e -> e.getTipoEvento() == TipoEventoReserva.CANCELAMENTO_SEM_FUNCIONAMENTO).count());
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false, false", "true, false", "false, true", "true, true"})
+    void deveReavaliarDisponibilidadeAposCalendarioConfirmarOuReverter(boolean dataAutomatica, boolean rollback)
+            throws Exception {
+        relogio.definir("2026-10-14T17:00:00");
+        LocalDate data = LocalDate.of(2026, 10, 15);
+        var bloqueio = new CadastroDataSemFuncionamentoRequest(data, "Manutencao");
+
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            var tentativa = transacao.execute(status -> {
+                dataSemFuncionamentoService.cadastrar(adminId, bloqueio);
+                int pid = jdbc.queryForObject("select pg_backend_pid()", Integer.class);
+                var reservaConcorrente = executor.submit(() -> reservar(dataAutomatica, data));
+                boolean aguardou = aguardarLockCalendario(pid, reservaConcorrente);
+                if (rollback) {
+                    status.setRollbackOnly();
+                }
+                assertTrue(aguardou, "A reserva deve aguardar o lock exclusivo do calendário.");
+                return reservaConcorrente;
+            });
+
+            assertEquals(!rollback, datasSemFuncionamento.existsByData(data));
+            if (!rollback && !dataAutomatica) {
+                var erro = assertThrows(ExecutionException.class, () -> tentativa.get(10, TimeUnit.SECONDS));
+                var causa = assertInstanceOf(RegraNegocioException.class, erro.getCause());
+                assertEquals("Não há funcionamento do transporte na data informada.", causa.getMessage());
+                assertEquals(0, reservas.count());
+                assertEquals(0, eventos.count());
+            } else {
+                var criada = tentativa.get(10, TimeUnit.SECONDS);
+                assertEquals(rollback ? data : data.plusDays(1), criada.dataUtilizacao());
+                assertEquals(StatusReserva.CONFIRMADA, reservas.findById(criada.id()).orElseThrow().getStatusReserva());
+                if (dataAutomatica) {
+                    assertEquals(criada.id(), reservaService.reservarProximaDataDisponivel(alunoId).id());
+                }
+                assertEquals(1, reservas.count());
+                assertEquals(1, eventos.count());
+            }
+        }
+    }
+
+    private ReservaResponse reservar(boolean dataAutomatica, LocalDate data) {
+        return dataAutomatica ? reservaService.reservarProximaDataDisponivel(alunoId)
+                : reservaService.cadastrar(alunoId, new CriacaoReservaRequest(data));
+    }
+
+    private boolean aguardarLockCalendario(int pidBloqueador, Future<?> concorrente) {
+        long limite = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (!concorrente.isDone() && System.nanoTime() < limite) {
+            if (Boolean.TRUE.equals(jdbc.queryForObject("""
+                    select exists (
+                        select 1 from pg_locks
+                        where locktype = 'advisory' and not granted
+                          and ? = any(pg_blocking_pids(pid))
+                    )
+                    """, Boolean.class, pidBloqueador))) {
+                return true;
+            }
+            try {
+                Thread.sleep(25);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+        }
+        return false;
+    }
+
+    private record ReservaComBloqueio(UUID id,
+            Future<DataSemFuncionamentoResponse> bloqueio,
+            boolean aguardou) {}
 
     @Test
     void deveReverterBloqueioECancelamentoQuandoEventoFalharNoPostgres() {

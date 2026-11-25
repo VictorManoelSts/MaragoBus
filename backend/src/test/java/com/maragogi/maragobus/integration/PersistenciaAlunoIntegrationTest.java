@@ -11,6 +11,8 @@ import com.maragogi.maragobus.service.PerfilAlunoService;
 import com.maragogi.maragobus.service.UsuarioService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
@@ -156,6 +158,41 @@ class PersistenciaAlunoIntegrationTest {
             jdbc.execute("DROP TRIGGER IF EXISTS rejeitar_perfil_teste ON perfis_aluno");
             jdbc.execute("DROP FUNCTION rejeitar_perfil_teste()");
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"cpf", "email"})
+    void deveImpedirIdentificadorDuplicadoNoPostgres(String coluna) {
+        var primeiro = usuarioService.cadastrarAluno(cadastro("primeiro@example.com", "52998224725"));
+        var segundo = usuarioService.cadastrarAluno(cadastro("segundo@example.com", "11144477735"));
+        String consulta = "select " + coluna + " from usuarios where id = ?";
+        String valorExistente = jdbc.queryForObject(consulta, String.class, primeiro.id());
+        String valorOriginal = jdbc.queryForObject(consulta, String.class, segundo.id());
+
+        var erro = assertThrows(DataIntegrityViolationException.class,
+                () -> jdbc.update("update usuarios set " + coluna + " = ? where id = ?",
+                        valorExistente, segundo.id()));
+
+        assertEquals("23505", assertInstanceOf(SQLException.class, erro.getMostSpecificCause()).getSQLState());
+        assertEquals(valorOriginal, jdbc.queryForObject(consulta, String.class, segundo.id()));
+        assertEquals(valorExistente, jdbc.queryForObject(consulta, String.class, primeiro.id()));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"usuario_id", "curso_ofertado_id", "ponto_embarque_padrao_id"})
+    void deveImpedirReferenciaInexistenteNoPerfilNoPostgres(String coluna) {
+        var aluno = usuarioService.cadastrarAluno(cadastro("referencia@example.com", "52998224725"));
+        UUID perfilId = novaTransacao.execute(status ->
+                perfilAlunoRepository.findByUsuarioId(aluno.id()).orElseThrow().getId());
+        String consulta = "select " + coluna + " from perfis_aluno where id = ?";
+        UUID referenciaOriginal = jdbc.queryForObject(consulta, UUID.class, perfilId);
+
+        var erro = assertThrows(DataIntegrityViolationException.class,
+                () -> jdbc.update("update perfis_aluno set " + coluna + " = ? where id = ?",
+                        UUID.randomUUID(), perfilId));
+
+        assertEquals("23503", assertInstanceOf(SQLException.class, erro.getMostSpecificCause()).getSQLState());
+        assertEquals(referenciaOriginal, jdbc.queryForObject(consulta, UUID.class, perfilId));
     }
 
     @Test

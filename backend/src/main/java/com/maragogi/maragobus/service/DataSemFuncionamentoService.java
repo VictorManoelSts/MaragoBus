@@ -23,6 +23,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
@@ -71,7 +72,7 @@ public class DataSemFuncionamentoService {
         this.clock = clock.withZone(FUSO);
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public DataSemFuncionamentoResponse cadastrar(
             @NotNull(message = "O administrador é obrigatório.") UUID administradorId,
             @NotNull(message = "Os dados da data sem funcionamento são obrigatórios.") @Valid
