@@ -10,6 +10,8 @@ import com.maragogi.maragobus.repository.CursoRepository;
 import com.maragogi.maragobus.repository.FaculdadeRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -33,6 +35,19 @@ public class CursoOfertadoService {
 
     @Transactional
     public CursoOfertadoResponse cadastrar(@Valid @NotNull CadastroCursoOfertadoRequest dados) {
+        var oferta = CursoOfertado.builder().ativo(true).build();
+        definirDados(oferta, dados);
+        return converterParaResponse(cursoOfertadoRepository.save(oferta));
+    }
+
+    @Transactional
+    public CursoOfertadoResponse atualizarDados(@NotNull UUID id, @Valid @NotNull CadastroCursoOfertadoRequest dados) {
+        var oferta = buscarOferta(id);
+        definirDados(oferta, dados);
+        return converterParaResponse(oferta);
+    }
+
+    private void definirDados(CursoOfertado oferta, CadastroCursoOfertadoRequest dados) {
         var curso = cursoRepository.findById(dados.cursoId())
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Curso não encontrado."));
         if (!curso.isAtivo()) {
@@ -44,12 +59,19 @@ public class CursoOfertadoService {
             throw new RegraNegocioException("A faculdade está inativa.");
         }
         if (cursoOfertadoRepository.findByCursoIdAndFaculdadeIdAndModalidadeEnsino(
-                dados.cursoId(), dados.faculdadeId(), dados.modalidadeEnsino()).isPresent()) {
+                dados.cursoId(), dados.faculdadeId(), dados.modalidadeEnsino())
+                .filter(existente -> oferta.getId() == null || !oferta.getId().equals(existente.getId()))
+                .isPresent()) {
             throw new RegraNegocioException("Já existe uma oferta para este curso, faculdade e modalidade de ensino.");
         }
-        var oferta = CursoOfertado.builder().curso(curso).faculdade(faculdade)
-                .modalidadeEnsino(dados.modalidadeEnsino()).ativo(true).build();
-        return converterParaResponse(cursoOfertadoRepository.save(oferta));
+        oferta.setCurso(curso);
+        oferta.setFaculdade(faculdade);
+        oferta.setModalidadeEnsino(dados.modalidadeEnsino());
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CursoOfertadoResponse> listar(@NotNull Pageable pagina, boolean somenteAtivos, UUID faculdadeId) {
+        return cursoOfertadoRepository.listar(pagina, somenteAtivos, faculdadeId).map(this::converterParaResponse);
     }
 
     @Transactional(readOnly = true)

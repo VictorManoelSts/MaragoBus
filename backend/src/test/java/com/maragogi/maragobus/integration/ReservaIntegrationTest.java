@@ -247,7 +247,7 @@ class ReservaIntegrationTest {
             assertEquals(StatusReserva.CANCELADA_PELO_ALUNO, reservas.findById(original.id()).orElseThrow().getStatusReserva());
             assertEquals(StatusReserva.CONFIRMADA, reservas.findById(nova.id()).orElseThrow().getStatusReserva());
         });
-        assertThrows(RegraNegocioException.class, () -> service.cancelar(alunoId, original.id()));
+        assertEquals(cancelada, service.cancelar(alunoId, original.id()));
         transacao.executeWithoutResult(status -> assertEquals(cancelada.dataHoraCancelamento(),
                 reservas.findById(original.id()).orElseThrow().getDataHoraCancelamento()));
     }
@@ -292,9 +292,7 @@ class ReservaIntegrationTest {
                     assertNotEquals(original.id(), nova.id());
                     assertEquals(StatusReserva.CONFIRMADA, nova.statusReserva());
                 } else {
-                    var erro = assertThrows(ExecutionException.class, () -> segunda.get(15, TimeUnit.SECONDS));
-                    assertInstanceOf(RegraNegocioException.class, erro.getCause());
-                    assertEquals("Somente reservas confirmadas podem ser canceladas.", erro.getCause().getMessage());
+                    assertEquals(cancelada, segunda.get(15, TimeUnit.SECONDS));
                 }
                 transacao.executeWithoutResult(status -> {
                     var persistida = reservas.findById(original.id()).orElseThrow();

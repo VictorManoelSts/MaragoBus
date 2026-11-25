@@ -14,6 +14,7 @@ import com.maragogi.maragobus.enums.StatusReserva;
 import com.maragogi.maragobus.enums.TipoUsuario;
 import com.maragogi.maragobus.exception.RecursoNaoEncontradoException;
 import com.maragogi.maragobus.exception.RegraNegocioException;
+import com.maragogi.maragobus.exception.ReservaDeOutroAlunoException;
 import com.maragogi.maragobus.repository.DataSemFuncionamentoRepository;
 import com.maragogi.maragobus.repository.PerfilAlunoRepository;
 import com.maragogi.maragobus.repository.PontoEmbarqueRepository;
@@ -120,10 +121,15 @@ public class ReservaService {
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ReservaResponse reservarProximaDataDisponivel(@NotNull UUID alunoId) {
+        return reservarProximaDataDisponivel(alunoId, null);
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public ReservaResponse reservarProximaDataDisponivel(@NotNull UUID alunoId, UUID pontoEmbarqueId) {
         var aluno = validarAlunoComLock(alunoId, "Somente alunos podem criar reservas.");
         var perfil = perfilAlunoRepository.findByUsuarioId(alunoId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Perfil de aluno não encontrado."));
-        var ponto = validarPontoPadrao(perfil);
+        var pontoPadrao = pontoEmbarqueId == null ? validarPontoPadrao(perfil) : null;
 
         dataSemFuncionamentoRepository.bloquearCalendarioParaLeitura();
         LocalDate hoje = LocalDate.now(clock);
@@ -140,6 +146,7 @@ public class ReservaService {
             return mapearResposta(existente.get());
         }
 
+        var ponto = pontoEmbarqueId == null ? pontoPadrao : buscarPontoAtivo(pontoEmbarqueId);
         var salva = reservaRepository.saveAndFlush(construirReservaComSnapshot(aluno, perfil, ponto, dataAlvo));
         if (eventoReservaService != null) {
             eventoReservaService.registrarCriacao(salva, aluno, salva.getDataHoraReserva());
@@ -164,7 +171,10 @@ public class ReservaService {
         var reserva = reservaRepository.findLockedById(reservaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Reserva não encontrada."));
         if (!reserva.getAluno().getId().equals(alunoId)) {
-            throw new RegraNegocioException("A reserva não pertence ao aluno solicitante.");
+            throw new ReservaDeOutroAlunoException();
+        }
+        if (reserva.getStatusReserva() == StatusReserva.CANCELADA_PELO_ALUNO) {
+            return mapearResposta(reserva);
         }
         if (reserva.getStatusReserva() != StatusReserva.CONFIRMADA) {
             throw new RegraNegocioException("Somente reservas confirmadas podem ser canceladas.");
@@ -192,7 +202,7 @@ public class ReservaService {
         var reserva = reservaRepository.findLockedById(reservaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Reserva não encontrada."));
         if (!reserva.getAluno().getId().equals(alunoId)) {
-            throw new RegraNegocioException("A reserva não pertence ao aluno solicitante.");
+            throw new ReservaDeOutroAlunoException();
         }
         if (reserva.getStatusReserva() != StatusReserva.CONFIRMADA) {
             throw new RegraNegocioException("Somente reservas confirmadas podem ter o ponto de embarque alterado.");
@@ -204,11 +214,7 @@ public class ReservaService {
         if (!regrasTemporais.permiteAlterarPontoEmbarque(reserva.getDataUtilizacao())) {
             throw new RegraNegocioException("O horário está fora do prazo de alteração do ponto de embarque.");
         }
-        var ponto = pontoEmbarqueRepository.findById(dados.pontoEmbarqueId())
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Ponto de embarque não encontrado."));
-        if (!ponto.isAtivo()) {
-            throw new RegraNegocioException("O ponto de embarque está inativo.");
-        }
+        var ponto = buscarPontoAtivo(dados.pontoEmbarqueId());
         String pontoAnteriorNome = reserva.getPontoEmbarqueNomeSnapshot() != null
                 ? reserva.getPontoEmbarqueNomeSnapshot()
                 : reserva.getPontoEmbarque().getNome();
@@ -293,6 +299,15 @@ public class ReservaService {
             throw new RegraNegocioException("O aluno está inativo.");
         }
         return aluno;
+    }
+
+    private PontoEmbarque buscarPontoAtivo(UUID pontoEmbarqueId) {
+        var ponto = pontoEmbarqueRepository.findById(pontoEmbarqueId)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Ponto de embarque não encontrado."));
+        if (!ponto.isAtivo()) {
+            throw new RegraNegocioException("O ponto de embarque está inativo.");
+        }
+        return ponto;
     }
 
     private PontoEmbarque validarPontoPadrao(PerfilAluno perfil) {

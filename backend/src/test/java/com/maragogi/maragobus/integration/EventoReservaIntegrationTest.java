@@ -234,6 +234,7 @@ class EventoReservaIntegrationTest {
         relogio.definir("2026-10-14T11:00:00");
         fechamento.executar();
         reservaService.cancelarPorPontoInativo(alunoId, id);
+        assertEquals(original, reservaService.cancelar(alunoId, id));
         var persistida = reservas.findById(id).orElseThrow();
         assertEquals(original.statusReserva(), persistida.getStatusReserva());
         assertEquals(original.dataHoraCancelamento(), persistida.getDataHoraCancelamento());

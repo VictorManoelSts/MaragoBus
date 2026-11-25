@@ -1,0 +1,326 @@
+{
+  "info": {
+    "name": "MaragoBus — Reservas do aluno",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Execute apenas em 127.0.0.1:8080 com o perfil curso-local e PostgreSQL isolado com dados fictícios. A consulta anônima está disponível para validação de segurança. O fluxo do aluno exige autenticação que forneça AlunoAutenticado, autoridade ROLE_ALUNO, uma sessão local válida e o token CSRF associado. O Basic genérico atual não fornece essa identidade. Cadastre dois pontos ativos fictícios, configure seus UUIDs e execute o fluxo antes das 11h em uma janela aberta, com aluno ativo e sem suspensão. Mantenha desativado o seguimento de redirecionamentos."
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.request.url.toString().startsWith(\"http://127.0.0.1:8080/api/reservas\")) { pm.execution.skipRequest(); throw new Error(\"A coleção exige localhost.\"); }"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "pontoId",
+      "value": ""
+    },
+    {
+      "key": "outroPontoId",
+      "value": ""
+    },
+    {
+      "key": "reservaId",
+      "value": ""
+    },
+    {
+      "key": "csrfToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Recusar consulta anônima",
+      "protocolProfileBehavior": {
+        "disableCookies": true,
+        "followRedirects": false
+      },
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "http://127.0.0.1:8080/api/reservas/atual"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Fluxo do aluno autenticado",
+      "item": [
+        {
+          "name": "Criar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-TOKEN",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": "http://127.0.0.1:8080/api/reservas",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"pontoEmbarqueId\":\"{{pontoId}}\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"reservaId\", pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Repetir criação",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-TOKEN",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": "http://127.0.0.1:8080/api/reservas",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"pontoEmbarqueId\":\"{{pontoId}}\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Mesmo UUID\", () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get(\"reservaId\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar situação",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://127.0.0.1:8080/api/reservas/atual"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar histórico",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://127.0.0.1:8080/api/reservas/historico?page=0&size=10"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Alterar ponto",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-TOKEN",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": "http://127.0.0.1:8080/api/reservas/{{reservaId}}/ponto",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"pontoEmbarqueId\":\"{{outroPontoId}}\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancelar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-TOKEN",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": "http://127.0.0.1:8080/api/reservas/{{reservaId}}/cancelamento"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Cancelada pelo aluno\", () => pm.expect(pm.response.json().statusReserva).to.eql(\"CANCELADA_PELO_ALUNO\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Repetir cancelamento",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-TOKEN",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": "http://127.0.0.1:8080/api/reservas/{{reservaId}}/cancelamento"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reservar novamente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-TOKEN",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": "http://127.0.0.1:8080/api/reservas",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"pontoEmbarqueId\":\"{{outroPontoId}}\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Novo UUID\", () => pm.expect(pm.response.json().id).to.not.eql(pm.collectionVariables.get(\"reservaId\")));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 package com.maragogi.maragobus.integration;
 
+import com.maragogi.maragobus.dto.cursoofertado.CadastroCursoOfertadoRequest;
 import com.maragogi.maragobus.entity.*;
 import com.maragogi.maragobus.dto.pontoembarque.AtualizacaoPontoEmbarqueRequest;
 import com.maragogi.maragobus.dto.pontoembarque.CadastroPontoEmbarqueRequest;
@@ -9,6 +10,7 @@ import com.maragogi.maragobus.enums.StatusReserva;
 import com.maragogi.maragobus.enums.TipoUsuario;
 import com.maragogi.maragobus.exception.RegraNegocioException;
 import com.maragogi.maragobus.repository.*;
+import com.maragogi.maragobus.service.CursoOfertadoService;
 import com.maragogi.maragobus.service.PontoEmbarqueService;
 import com.maragogi.maragobus.service.ReservaService;
 import org.junit.jupiter.api.AfterEach;
@@ -92,6 +94,7 @@ class ReservaAdequacaoIntegrationTest {
     @Autowired PerfilAlunoRepository perfis;
     @Autowired UsuarioRepository usuarios;
     @Autowired CursoOfertadoRepository ofertas;
+    @Autowired CursoOfertadoService cursoOfertadoService;
     @Autowired PontoEmbarqueRepository pontos;
     @Autowired CursoRepository cursos;
     @Autowired FaculdadeRepository faculdades;
@@ -197,6 +200,42 @@ class ReservaAdequacaoIntegrationTest {
         // 4. Fora de qualquer janela (13:00 do mesmo dia) deve rejeitar
         relogio.definir("2026-10-14T13:00:00");
         assertThrows(RegraNegocioException.class, () -> reservaService.reservarProximaDataDisponivel(alunoId));
+    }
+
+    @Test
+    void preservaReservaESnapshotsAoAtualizarEDesativarOferta() {
+        var reserva = reservaService.reservarProximaDataDisponivel(alunoId);
+        var ofertaId = ofertas.findAll().getFirst().getId();
+        var novoCurso = cursos.save(Curso.builder().nome("Engenharia").build());
+        var novaFaculdade = faculdades.save(Faculdade.builder().nome("Faculdade Nova").build());
+        var dados = new CadastroCursoOfertadoRequest(novoCurso.getId(), novaFaculdade.getId(), ModalidadeEnsino.EAD);
+
+        cursoOfertadoService.atualizarDados(ofertaId, dados);
+        cursoOfertadoService.desativar(ofertaId);
+
+        var inativa = cursoOfertadoService.buscarPorId(ofertaId);
+        assertFalse(inativa.ativo());
+        assertEquals(novoCurso.getId(), inativa.cursoId());
+        assertEquals(novaFaculdade.getId(), inativa.faculdadeId());
+        assertEquals(ModalidadeEnsino.EAD, inativa.modalidadeEnsino());
+        verificarReservaDaOferta(reserva.id(), ofertaId);
+
+        cursoOfertadoService.reativar(ofertaId);
+        assertTrue(cursoOfertadoService.buscarPorId(ofertaId).ativo());
+        verificarReservaDaOferta(reserva.id(), ofertaId);
+    }
+
+    private void verificarReservaDaOferta(UUID reservaId, UUID ofertaId) {
+        transacao.executeWithoutResult(status -> {
+            assertEquals(1, reservas.count());
+            var reserva = reservas.findById(reservaId).orElseThrow();
+            assertEquals(StatusReserva.CONFIRMADA, reserva.getStatusReserva());
+            assertEquals(faculdadeId, reserva.getFaculdadeIdSnapshot());
+            assertEquals("Direito", reserva.getCursoNomeSnapshot());
+            assertEquals("Faculdade Original", reserva.getFaculdadeNomeSnapshot());
+            assertEquals("Praça Central", reserva.getPontoEmbarqueNomeSnapshot());
+            assertEquals(ofertaId, perfis.findAll().getFirst().getCursoOfertado().getId());
+        });
     }
 
     @Test

@@ -253,8 +253,8 @@ class ReservaServiceTest {
         assertNull(reserva.getDataHoraCancelamento()); semPersistencia();
     }
 
-    @ParameterizedTest @EnumSource(value = StatusReserva.class, names = {"CANCELADA_PELO_ALUNO", "CANCELADA_POR_SUSPENSAO"})
-    void deveRejeitarReservaJaCanceladaSemSobrescreverHorario(StatusReserva status) {
+    @ParameterizedTest @EnumSource(value = StatusReserva.class, names = {"CANCELADA_POR_SUSPENSAO", "CANCELADA_POR_PONTO_INATIVO"})
+    void deveRejeitarReservaJaCanceladaPeloSistemaSemSobrescreverHorario(StatusReserva status) {
         var reserva = reservaConfirmada(); var anterior = LocalDateTime.parse("2026-10-10T12:00:00");
         reserva.setStatusReserva(status); reserva.setDataHoraCancelamento(anterior); reservaDisponivel(reserva);
         assertThrows(RegraNegocioException.class,

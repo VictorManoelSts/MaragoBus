@@ -1,0 +1,592 @@
+{
+  "info": {
+    "name": "MaragoBus | Curso ofertado local",
+    "description": "Execute com o perfil curso-local, PostgreSQL isolado e credenciais fictícias via usuario e senha. Use um banco vazio.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "basic",
+    "basic": [
+      {
+        "key": "username",
+        "value": "{{usuario}}",
+        "type": "string"
+      },
+      {
+        "key": "password",
+        "value": "{{senha}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:18081"
+    }
+  ],
+  "item": [
+    {
+      "name": "Acesso anônimo",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/cursos-ofertados",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sessão e token CSRF",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "text/html"
+          }
+        ],
+        "url": "{{baseUrl}}/login",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "const token = pm.response.text().match(/<input\\b(?=[^>]*\\bname=\"_csrf\")[^>]*\\bvalue=\"([^\"]+)\"/);",
+              "pm.test(\"Token CSRF disponível\", () => pm.expect(token).to.be.an(\"array\"));",
+              "if (token) pm.collectionVariables.set(\"csrfToken\", token[1]);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Escrita sem CSRF",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/cursos-ofertados",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"cursoId\":\"{{cursoId}}\",\"faculdadeId\":\"{{faculdadeId}}\",\"modalidadeEnsino\":\"PRESENCIAL\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cadastrar Curso fictício",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/cursos",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"nome\":\"Curso fictício\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set(\"cursoId\", pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cadastrar Faculdade fictícia",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/faculdades",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"nome\":\"Faculdade fictícia\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set(\"faculdadeId\", pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cadastrar oferta",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/cursos-ofertados",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"cursoId\":\"{{cursoId}}\",\"faculdadeId\":\"{{faculdadeId}}\",\"modalidadeEnsino\":\"PRESENCIAL\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "const oferta = pm.response.json();",
+              "pm.collectionVariables.set(\"ofertaId\", oferta.id);",
+              "pm.test(\"DTO e Location\", () => {",
+              "    pm.expect(oferta.cursoId).to.equal(pm.collectionVariables.get(\"cursoId\"));",
+              "    pm.expect(oferta.faculdadeId).to.equal(pm.collectionVariables.get(\"faculdadeId\"));",
+              "    pm.expect(oferta.modalidadeEnsino).to.equal(\"PRESENCIAL\");",
+              "    pm.expect(oferta.ativo).to.equal(true);",
+              "    pm.expect(pm.response.headers.get(\"Location\")).to.equal(pm.variables.get(\"baseUrl\") + \"/api/cursos-ofertados/\" + oferta.id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Consultar oferta",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/cursos-ofertados/{{ofertaId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"UUID da oferta\", () => pm.expect(pm.response.json().id).to.equal(pm.collectionVariables.get(\"ofertaId\")));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Listar com paginação e filtros",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/cursos-ofertados?page=0&size=1&somenteAtivos=true&faculdadeId={{faculdadeId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "const pagina = pm.response.json();",
+              "pm.test(\"Página filtrada\", () => {",
+              "    pm.expect(pagina.page).to.include({number: 0, size: 1, totalElements: 1, totalPages: 1});",
+              "    pm.expect(pagina.content[0].id).to.equal(pm.collectionVariables.get(\"ofertaId\"));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Modalidade inválida",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/cursos-ofertados",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"cursoId\":\"{{cursoId}}\",\"faculdadeId\":\"{{faculdadeId}}\",\"modalidadeEnsino\":\"INVALIDA\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Vínculo inexistente",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/cursos-ofertados",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"cursoId\":\"00000000-0000-0000-0000-000000000000\",\"faculdadeId\":\"{{faculdadeId}}\",\"modalidadeEnsino\":\"PRESENCIAL\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "UUID inválido",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/cursos-ofertados/invalido"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Atualizar modalidade",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/cursos-ofertados/{{ofertaId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"cursoId\":\"{{cursoId}}\",\"faculdadeId\":\"{{faculdadeId}}\",\"modalidadeEnsino\":\"EAD\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Modalidade atualizada\", () => pm.expect(pm.response.json().modalidadeEnsino).to.equal(\"EAD\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Desativar",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/cursos-ofertados/{{ofertaId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 204\", () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Consultar oferta inativa",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/cursos-ofertados/{{ofertaId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Oferta inativa\", () => pm.expect(pm.response.json().ativo).to.equal(false));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Listar somente ativos após desativação",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/cursos-ofertados?somenteAtivos=true"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Oferta inativa fora da lista\", () => pm.expect(pm.response.json().content).to.be.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Impedir duplicação mesmo inativa",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/cursos-ofertados",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"cursoId\":\"{{cursoId}}\",\"faculdadeId\":\"{{faculdadeId}}\",\"modalidadeEnsino\":\"EAD\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reativar oferta",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-TOKEN",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/cursos-ofertados/{{ofertaId}}/reativacao"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 204\", () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Consultar oferta reativada",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/cursos-ofertados/{{ofertaId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Oferta reativada\", () => pm.expect(pm.response.json()).to.include({ativo: true, modalidadeEnsino: \"EAD\"}));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
