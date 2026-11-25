@@ -40,6 +40,7 @@ public class SuspensaoService {
     private final UsuarioRepository usuarioRepository;
     private final DataSemFuncionamentoRepository dataSemFuncionamentoRepository;
     private final RegrasTemporaisSuspensao regrasTemporaisSuspensao;
+    private final EventoReservaService eventos;
     private final Clock clock;
 
     public SuspensaoService(AdvertenciaRepository advertenciaRepository,
@@ -48,6 +49,7 @@ public class SuspensaoService {
                             UsuarioRepository usuarioRepository,
                             DataSemFuncionamentoRepository dataSemFuncionamentoRepository,
                             RegrasTemporaisSuspensao regrasTemporaisSuspensao,
+                            EventoReservaService eventos,
                             Clock clock) {
         this.advertenciaRepository = advertenciaRepository;
         this.suspensaoRepository = suspensaoRepository;
@@ -55,6 +57,7 @@ public class SuspensaoService {
         this.usuarioRepository = usuarioRepository;
         this.dataSemFuncionamentoRepository = dataSemFuncionamentoRepository;
         this.regrasTemporaisSuspensao = regrasTemporaisSuspensao;
+        this.eventos = eventos;
         this.clock = clock.withZone(ZoneId.of("America/Maceio"));
     }
 
@@ -92,12 +95,13 @@ public class SuspensaoService {
 
         Suspensao salva = suspensaoRepository.save(suspensao);
 
-        var reservasAfetadas = reservaRepository.findByAlunoIdAndStatusReservaAndDataUtilizacaoBetween(
+        var reservasAfetadas = reservaRepository.findByAlunoIdAndStatusReservaAndDataUtilizacaoBetweenOrderById(
                 alunoId, StatusReserva.CONFIRMADA, dataInicio, dataFim);
 
         for (var reserva : reservasAfetadas) {
             reserva.setStatusReserva(StatusReserva.CANCELADA_POR_SUSPENSAO);
             reserva.setDataHoraCancelamento(dataHoraAplicacao);
+            eventos.registrarCancelamentoPorSuspensao(reserva, administradorResponsavel, null, dataHoraAplicacao);
         }
 
         return Optional.of(salva);

@@ -114,6 +114,23 @@ public class EventoReservaService {
         );
     }
 
+    @Transactional
+    public EventoReservaResponse registrarCancelamentoSemFuncionamento(
+            Reserva reserva,
+            Usuario autor,
+            String motivo,
+            LocalDateTime dataHoraEvento) {
+        return salvarEvento(
+                reserva,
+                TipoEventoReserva.CANCELAMENTO_SEM_FUNCIONAMENTO,
+                StatusReserva.CONFIRMADA,
+                StatusReserva.CANCELADA_SEM_FUNCIONAMENTO,
+                autor,
+                motivo,
+                dataHoraEvento
+        );
+    }
+
     @Transactional(readOnly = true)
     public List<EventoReservaResponse> consultarPorReserva(
             @NotNull(message = "O solicitante é obrigatório.") UUID solicitanteId,

@@ -158,7 +158,7 @@ public class ReservaService {
     private ReservaResponse executarCancelamento(UUID alunoId, UUID reservaId, String motivo) {
         // Mesma ordem da criação: lock do aluno antes de consultar ou alterar reservas.
         var aluno = validarAlunoComLock(alunoId, "Somente alunos podem cancelar reservas.");
-        var reserva = reservaRepository.findById(reservaId)
+        var reserva = reservaRepository.findLockedById(reservaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Reserva não encontrada."));
         if (!reserva.getAluno().getId().equals(alunoId)) {
             throw new RegraNegocioException("A reserva não pertence ao aluno solicitante.");
@@ -186,7 +186,7 @@ public class ReservaService {
                                                 @Valid @NotNull AtualizacaoPontoEmbarqueReservaRequest dados) {
         // Consultar a reserva somente depois de adquirir o mesmo lock da criação e do cancelamento.
         var aluno = validarAlunoComLock(alunoId, "Somente alunos podem alterar o ponto de embarque de reservas.");
-        var reserva = reservaRepository.findById(reservaId)
+        var reserva = reservaRepository.findLockedById(reservaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Reserva não encontrada."));
         if (!reserva.getAluno().getId().equals(alunoId)) {
             throw new RegraNegocioException("A reserva não pertence ao aluno solicitante.");

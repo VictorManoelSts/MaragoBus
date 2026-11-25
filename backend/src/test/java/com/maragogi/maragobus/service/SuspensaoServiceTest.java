@@ -15,6 +15,7 @@ import com.maragogi.maragobus.repository.DataSemFuncionamentoRepository;
 import com.maragogi.maragobus.repository.ReservaRepository;
 import com.maragogi.maragobus.repository.SuspensaoRepository;
 import com.maragogi.maragobus.repository.UsuarioRepository;
+import com.maragogi.maragobus.service.EventoReservaService;
 import com.maragogi.maragobus.service.SuspensaoService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,6 +55,9 @@ class SuspensaoServiceTest {
     @Mock
     private DataSemFuncionamentoRepository dataSemFuncionamentoRepository;
 
+    @Mock
+    private EventoReservaService eventos;
+
     private SuspensaoService suspensaoService;
     private Clock clock;
 
@@ -71,6 +75,7 @@ class SuspensaoServiceTest {
                 usuarioRepository,
                 dataSemFuncionamentoRepository,
                 regrasSuspensao,
+                eventos,
                 clock
         );
     }
@@ -88,7 +93,7 @@ class SuspensaoServiceTest {
 
         assertTrue(resultado.isEmpty());
         verify(suspensaoRepository, never()).save(any());
-        verify(reservaRepository, never()).findByAlunoIdAndStatusReservaAndDataUtilizacaoBetween(any(), any(), any(), any());
+        verify(reservaRepository, never()).findByAlunoIdAndStatusReservaAndDataUtilizacaoBetweenOrderById(any(), any(), any(), any());
     }
 
     @Test
@@ -111,7 +116,7 @@ class SuspensaoServiceTest {
             s.setId(UUID.randomUUID());
             return s;
         });
-        when(reservaRepository.findByAlunoIdAndStatusReservaAndDataUtilizacaoBetween(
+        when(reservaRepository.findByAlunoIdAndStatusReservaAndDataUtilizacaoBetweenOrderById(
                 aluno.getId(), StatusReserva.CONFIRMADA, LocalDate.of(2026, 10, 7), LocalDate.of(2026, 10, 7)))
                 .thenReturn(List.of(reservaHoje));
 
@@ -127,6 +132,7 @@ class SuspensaoServiceTest {
 
         assertEquals(StatusReserva.CANCELADA_POR_SUSPENSAO, reservaHoje.getStatusReserva());
         assertEquals(agora, reservaHoje.getDataHoraCancelamento());
+        verify(eventos).registrarCancelamentoPorSuspensao(reservaHoje, admin, null, agora);
     }
 
     @Test
@@ -150,7 +156,7 @@ class SuspensaoServiceTest {
             s.setId(UUID.randomUUID());
             return s;
         });
-        when(reservaRepository.findByAlunoIdAndStatusReservaAndDataUtilizacaoBetween(
+        when(reservaRepository.findByAlunoIdAndStatusReservaAndDataUtilizacaoBetweenOrderById(
                 aluno.getId(), StatusReserva.CONFIRMADA, LocalDate.of(2026, 10, 8), LocalDate.of(2026, 10, 12)))
                 .thenReturn(List.of(reservaQuinta));
 
@@ -181,7 +187,7 @@ class SuspensaoServiceTest {
             s.setId(UUID.randomUUID());
             return s;
         });
-        when(reservaRepository.findByAlunoIdAndStatusReservaAndDataUtilizacaoBetween(
+        when(reservaRepository.findByAlunoIdAndStatusReservaAndDataUtilizacaoBetweenOrderById(
                 aluno.getId(), StatusReserva.CONFIRMADA, LocalDate.of(2026, 10, 8), LocalDate.of(2026, 10, 13)))
                 .thenReturn(List.of());
 

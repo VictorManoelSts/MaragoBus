@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.repository.query.Param;
 import com.maragogi.maragobus.repository.projection.ResumoReservasPorFaculdadePonto;
 import com.maragogi.maragobus.dto.reserva.PassageiroConfirmadoResponse;
@@ -84,12 +86,17 @@ public interface ReservaRepository extends JpaRepository<Reserva, UUID> {
 
     List<Reserva> findByAlunoIdOrderByDataUtilizacaoDesc(UUID alunoId);
 
-    List<Reserva> findByDataUtilizacaoAndStatusReserva(
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Reserva> findLockedById(UUID id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    List<Reserva> findByDataUtilizacaoAndStatusReservaOrderById(
             LocalDate dataUtilizacao,
             StatusReserva statusReserva
     );
 
-    List<Reserva> findByAlunoIdAndStatusReservaAndDataUtilizacaoBetween(
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    List<Reserva> findByAlunoIdAndStatusReservaAndDataUtilizacaoBetweenOrderById(
             UUID alunoId,
             StatusReserva statusReserva,
             LocalDate dataInicio,

@@ -11,6 +11,8 @@ import com.maragogi.maragobus.service.ReservaService;
 import com.maragogi.maragobus.service.SuspensaoService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -79,6 +81,7 @@ class SuspensaoIntegrationTest {
     @Autowired AdvertenciaRepository advertencias;
     @Autowired SolicitacaoAdvertenciaRepository solicitacoes;
     @Autowired ReservaRepository reservas;
+    @Autowired EventoReservaRepository eventos;
     @Autowired PerfilAlunoRepository perfis;
     @Autowired UsuarioRepository usuarios;
     @Autowired CursoOfertadoRepository ofertas;
@@ -193,6 +196,17 @@ class SuspensaoIntegrationTest {
             var reservaQuarta = reservas.findById(reservaQuartaId).orElseThrow();
             assertEquals(StatusReserva.CANCELADA_POR_SUSPENSAO, reservaQuarta.getStatusReserva());
             assertEquals(LocalDateTime.of(2026, 10, 7, 9, 30), reservaQuarta.getDataHoraCancelamento());
+
+            var historico = eventos.findByReservaIdOrderByDataHoraEventoAscIdAsc(reservaQuartaId);
+            assertEquals(1, historico.size());
+            var evento = historico.getFirst();
+            assertEquals(TipoEventoReserva.CANCELAMENTO_POR_SUSPENSAO,
+                    evento.getTipoEvento());
+            assertEquals(StatusReserva.CONFIRMADA, evento.getStatusAnterior());
+            assertEquals(reservaQuarta.getStatusReserva(), evento.getStatusNovo());
+            assertEquals(reservaQuarta.getDataHoraCancelamento(), evento.getDataHoraEvento());
+            assertEquals(adminId, evento.getAutorId());
+            assertEquals("Reserva cancelada automaticamente por suspensão vigente.", evento.getMotivo());
         });
 
         // Ainda antes das 11:00: janela de quarta está aberta, mas o aluno está suspenso.
@@ -303,8 +317,9 @@ class SuspensaoIntegrationTest {
         assertTrue(somenteVigentes.getContent().getFirst().vigente());
     }
 
-    @Test
-    void deveFazerRollbackAtomicoQuandoPersistenciaDaSuspensaoFalharNoPostgres() {
+    @ParameterizedTest
+    @ValueSource(strings = {"suspensoes", "eventos_reserva"})
+    void deveFazerRollbackAtomicoQuandoPersistenciaDaSuspensaoOuDoEventoFalharNoPostgres(String tabela) {
         LocalDate quarta = LocalDate.of(2026, 10, 7);
         UUID reservaId = criarReservaConfirmada(quarta);
 
@@ -320,12 +335,13 @@ class SuspensaoIntegrationTest {
                 end $$
                 """);
         try {
-            jdbc.execute("create trigger falhar_suspensao_teste after insert on suspensoes for each row execute function falhar_suspensao_teste()");
+            jdbc.execute("create trigger falhar_suspensao_teste after insert on " + tabela
+                    + " for each row execute function falhar_suspensao_teste()");
             var erro = assertThrows(DataIntegrityViolationException.class,
                     () -> analiseService.aprovar(adminId, terceiraSolicitacaoId, new AprovacaoSolicitacaoAdvertenciaRequest("Falha")));
             assertTrue(erro.getMostSpecificCause().getMessage().contains("FALHA_CONTROLADA_SUSPENSAO"));
         } finally {
-            jdbc.execute("drop trigger if exists falhar_suspensao_teste on suspensoes");
+            jdbc.execute("drop trigger if exists falhar_suspensao_teste on " + tabela);
             jdbc.execute("drop function falhar_suspensao_teste()");
         }
 
@@ -333,7 +349,10 @@ class SuspensaoIntegrationTest {
             assertEquals(StatusSolicitacaoAdvertencia.PENDENTE, solicitacoes.findById(terceiraSolicitacaoId).orElseThrow().getStatus());
             assertEquals(2, advertencias.count());
             assertEquals(0, suspensoes.count());
-            assertEquals(StatusReserva.CONFIRMADA, reservas.findById(reservaId).orElseThrow().getStatusReserva());
+            var reserva = reservas.findById(reservaId).orElseThrow();
+            assertEquals(StatusReserva.CONFIRMADA, reserva.getStatusReserva());
+            assertNull(reserva.getDataHoraCancelamento());
+            assertTrue(eventos.findByReservaIdOrderByDataHoraEventoAscIdAsc(reservaId).isEmpty());
         });
     }
 

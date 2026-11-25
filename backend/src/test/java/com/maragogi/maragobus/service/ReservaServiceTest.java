@@ -176,7 +176,7 @@ class ReservaServiceTest {
 
     private void reservaDisponivel(Reserva reserva) {
         alunoDisponivel();
-        when(reservas.findById(reserva.getId())).thenReturn(Optional.of(reserva));
+        when(reservas.findLockedById(reserva.getId())).thenReturn(Optional.of(reserva));
     }
 
     private void verificarReservaPreservada(Reserva reserva, StatusReserva status, LocalDateTime cancelamento) {
@@ -205,7 +205,7 @@ class ReservaServiceTest {
                 () -> assertEquals(ponto.getId(), resposta.pontoEmbarqueId()), () -> assertEquals("Centro", resposta.pontoEmbarqueNome()));
         var ordem = inOrder(usuarios, reservas);
         ordem.verify(usuarios).findByIdParaCriarReserva(aluno.getId());
-        ordem.verify(reservas).findById(reservaId);
+        ordem.verify(reservas).findLockedById(reservaId);
         verifyNoMoreInteractions(reservas);
     }
 
@@ -233,7 +233,7 @@ class ReservaServiceTest {
 
     @Test void deveRejeitarCancelamentoDeReservaInexistente() {
         alunoDisponivel(); UUID reservaId = UUID.randomUUID();
-        when(reservas.findById(reservaId)).thenReturn(Optional.empty());
+        when(reservas.findLockedById(reservaId)).thenReturn(Optional.empty());
         assertThrows(RecursoNaoEncontradoException.class,
                 () -> service("2026-10-12T12:00:00").cancelar(aluno.getId(), reservaId));
         semPersistencia();
@@ -301,7 +301,7 @@ class ReservaServiceTest {
                 () -> assertEquals(novo.getId(), resposta.pontoEmbarqueId()), () -> assertEquals("Praça", resposta.pontoEmbarqueNome()));
         var ordem = inOrder(usuarios, reservas, pontos);
         ordem.verify(usuarios).findByIdParaCriarReserva(aluno.getId());
-        ordem.verify(reservas).findById(id);
+        ordem.verify(reservas).findLockedById(id);
         ordem.verify(pontos).findById(novo.getId());
         verifyNoMoreInteractions(usuarios, reservas, pontos); verifyNoInteractions(perfis);
     }
@@ -332,7 +332,7 @@ class ReservaServiceTest {
 
     @Test void deveRejeitarAlteracaoDeReservaInexistente() {
         alunoDisponivel(); UUID id = UUID.randomUUID();
-        when(reservas.findById(id)).thenReturn(Optional.empty());
+        when(reservas.findLockedById(id)).thenReturn(Optional.empty());
         assertThrows(RecursoNaoEncontradoException.class, () -> service("2026-10-12T10:00:00")
                 .alterarPontoEmbarque(aluno.getId(), id, new AtualizacaoPontoEmbarqueReservaRequest(ponto.getId())));
         verifyNoInteractions(pontos, perfis); verify(reservas, never()).save(any());

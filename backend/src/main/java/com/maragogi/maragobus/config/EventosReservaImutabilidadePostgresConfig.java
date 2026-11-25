@@ -17,6 +17,25 @@ public class EventosReservaImutabilidadePostgresConfig {
                 String banco = conexao.getMetaData().getDatabaseProductName();
                 if (banco != null && banco.toLowerCase().contains("postgresql")) {
                     jdbc.execute("""
+                            do $$
+                            begin
+                                if exists (
+                                    select 1 from pg_constraint
+                                    where conrelid = 'eventos_reserva'::regclass
+                                      and conname = 'eventos_reserva_tipo_evento_check'
+                                      and pg_get_constraintdef(oid) not like '%CANCELAMENTO_SEM_FUNCIONAMENTO%'
+                                ) then
+                                    alter table eventos_reserva
+                                        drop constraint eventos_reserva_tipo_evento_check,
+                                        add constraint eventos_reserva_tipo_evento_check check (
+                                            tipo_evento in ('CRIACAO', 'ALTERACAO_PONTO_EMBARQUE',
+                                                'CANCELAMENTO_PELO_ALUNO', 'CANCELAMENTO_POR_SUSPENSAO',
+                                                'CANCELAMENTO_SEM_FUNCIONAMENTO')
+                                        );
+                                end if;
+                            end $$;
+                            """);
+                    jdbc.execute("""
                             create or replace function impedir_mutacao_eventos_reserva()
                             returns trigger as $$
                             begin

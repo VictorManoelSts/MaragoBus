@@ -49,6 +49,7 @@ public class DataSemFuncionamentoService {
     private final SuspensaoRepository suspensoes;
     private final RegrasTemporaisReserva regrasTemporaisReserva;
     private final RegrasTemporaisSuspensao regrasTemporaisSuspensao;
+    private final EventoReservaService eventos;
     private final Clock clock;
 
     public DataSemFuncionamentoService(
@@ -58,6 +59,7 @@ public class DataSemFuncionamentoService {
             SuspensaoRepository suspensoes,
             RegrasTemporaisReserva regrasTemporaisReserva,
             RegrasTemporaisSuspensao regrasTemporaisSuspensao,
+            EventoReservaService eventos,
             Clock clock) {
         this.datasSemFuncionamento = datasSemFuncionamento;
         this.usuarios = usuarios;
@@ -65,6 +67,7 @@ public class DataSemFuncionamentoService {
         this.suspensoes = suspensoes;
         this.regrasTemporaisReserva = regrasTemporaisReserva;
         this.regrasTemporaisSuspensao = regrasTemporaisSuspensao;
+        this.eventos = eventos;
         this.clock = clock.withZone(FUSO);
     }
 
@@ -97,10 +100,11 @@ public class DataSemFuncionamentoService {
                 .dataHoraCadastro(agora)
                 .build());
 
-        List<Reserva> reservasAfetadas = reservas.findByDataUtilizacaoAndStatusReserva(data, StatusReserva.CONFIRMADA);
+        List<Reserva> reservasAfetadas = reservas.findByDataUtilizacaoAndStatusReservaOrderById(data, StatusReserva.CONFIRMADA);
         for (Reserva reserva : reservasAfetadas) {
             reserva.setStatusReserva(StatusReserva.CANCELADA_SEM_FUNCIONAMENTO);
             reserva.setDataHoraCancelamento(agora);
+            eventos.registrarCancelamentoSemFuncionamento(reserva, admin, motivoNormalizado, agora);
         }
 
         List<Suspensao> suspensoesAfetadas = suspensoes.findSuspensoesQueCobremData(data);
@@ -117,11 +121,14 @@ public class DataSemFuncionamentoService {
                         .getSolicitacaoAdvertencia()
                         .getAluno()
                         .getId();
-                List<Reserva> reservasNaNovaData = reservas.findByAlunoIdAndStatusReservaAndDataUtilizacaoBetween(
+                List<Reserva> reservasNaNovaData = reservas.findByAlunoIdAndStatusReservaAndDataUtilizacaoBetweenOrderById(
                         alunoId, StatusReserva.CONFIRMADA, novaDataFim, novaDataFim);
                 for (Reserva reserva : reservasNaNovaData) {
                     reserva.setStatusReserva(StatusReserva.CANCELADA_POR_SUSPENSAO);
                     reserva.setDataHoraCancelamento(agora);
+                    eventos.registrarCancelamentoPorSuspensao(reserva, admin,
+                            "Reserva cancelada automaticamente por extensão da suspensão após bloqueio da data "
+                                    + data + ".", agora);
                 }
             }
         }

@@ -19,6 +19,9 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -79,6 +82,8 @@ class DataSemFuncionamentoIntegrationTest {
     @Autowired AdvertenciaRepository advertencias;
     @Autowired SolicitacaoAdvertenciaRepository solicitacoes;
     @Autowired ReservaRepository reservas;
+    @Autowired EventoReservaRepository eventos;
+    @Autowired JdbcTemplate jdbc;
     @Autowired PerfilAlunoRepository perfis;
     @Autowired UsuarioRepository usuarios;
     @Autowired CursoOfertadoRepository ofertas;
@@ -139,6 +144,7 @@ class DataSemFuncionamentoIntegrationTest {
     }
 
     private void limparBanco() {
+        jdbc.execute("truncate table eventos_reserva");
         datasSemFuncionamento.deleteAllInBatch();
         suspensoes.deleteAllInBatch();
         advertencias.deleteAllInBatch();
@@ -166,6 +172,9 @@ class DataSemFuncionamentoIntegrationTest {
         return transacao.execute(status -> reservas.save(Reserva.builder()
                 .aluno(usuarios.findById(alunoId).orElseThrow())
                 .pontoEmbarque(pontos.findById(pontoId).orElseThrow())
+                .pontoEmbarqueNomeSnapshot("Ponto histórico")
+                .faculdadeNomeSnapshot("Faculdade histórica")
+                .cursoNomeSnapshot("Curso histórico")
                 .dataUtilizacao(dataUtilizacao)
                 .dataHoraReserva(dataUtilizacao.minusDays(1).atTime(18, 0))
                 .statusReserva(StatusReserva.CONFIRMADA)
@@ -180,7 +189,7 @@ class DataSemFuncionamentoIntegrationTest {
         UUID reservaQuintaId = criarReservaConfirmada(quinta);
 
         var resposta = dataSemFuncionamentoService.cadastrar(
-                adminId, new CadastroDataSemFuncionamentoRequest(quarta, "Feriado municipal"));
+                adminId, new CadastroDataSemFuncionamentoRequest(quarta, "  Feriado municipal  "));
 
         assertAll(
                 () -> assertNotNull(resposta.id()),
@@ -190,7 +199,7 @@ class DataSemFuncionamentoIntegrationTest {
                 () -> assertEquals(0L, resposta.suspensoesEstendidas())
         );
 
-        transacao.executeWithoutResult(status -> {
+        UUID eventoId = transacao.execute(status -> {
             assertTrue(datasSemFuncionamento.existsByData(quarta));
 
             var reservaQuarta = reservas.findById(reservaQuartaId).orElseThrow();
@@ -200,13 +209,72 @@ class DataSemFuncionamentoIntegrationTest {
             var reservaQuinta = reservas.findById(reservaQuintaId).orElseThrow();
             assertEquals(StatusReserva.CONFIRMADA, reservaQuinta.getStatusReserva());
             assertNull(reservaQuinta.getDataHoraCancelamento());
+            assertTrue(eventos.findByReservaIdOrderByDataHoraEventoAscIdAsc(reservaQuintaId).isEmpty());
+
+            var historico = eventos.findByReservaIdOrderByDataHoraEventoAscIdAsc(reservaQuartaId);
+            assertEquals(1, historico.size());
+            var evento = historico.getFirst();
+            assertEquals(TipoEventoReserva.CANCELAMENTO_SEM_FUNCIONAMENTO, evento.getTipoEvento());
+            assertEquals(StatusReserva.CONFIRMADA, evento.getStatusAnterior());
+            assertEquals(reservaQuarta.getStatusReserva(), evento.getStatusNovo());
+            assertEquals(reservaQuarta.getDataHoraCancelamento(), evento.getDataHoraEvento());
+            assertEquals(adminId, evento.getAutorId());
+            assertEquals("Admin Teste", evento.getAutorNomeSnapshot());
+            assertEquals(TipoUsuario.ADMIN, evento.getAutorTipoSnapshot());
+            assertEquals("Feriado municipal", evento.getMotivo());
+            assertEquals(quarta, evento.getDataUtilizacaoSnapshot());
+            assertEquals(pontoId, evento.getPontoEmbarqueIdSnapshot());
+            assertEquals("Ponto histórico", evento.getPontoEmbarqueNomeSnapshot());
+            assertEquals("Faculdade histórica", evento.getFaculdadeNomeSnapshot());
+            assertEquals("Curso histórico", evento.getCursoNomeSnapshot());
+            return evento.getId();
         });
+
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "update eventos_reserva set motivo = 'Alterado' where id = ?", eventoId));
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "delete from eventos_reserva where id = ?", eventoId));
+        assertEquals("Feriado municipal", eventos.findById(eventoId).orElseThrow().getMotivo());
 
         // Mesmo na janela normal da quarta (terça às 18:00), a reserva deve ser rejeitada
         relogio.definir("2026-10-13T18:00:00");
         var erro = assertThrows(RegraNegocioException.class,
                 () -> reservaService.cadastrar(alunoId, new CriacaoReservaRequest(quarta)));
         assertEquals("Não há funcionamento do transporte na data informada.", erro.getMessage());
+    }
+
+    @Test
+    void deveReverterBloqueioECancelamentoQuandoEventoFalharNoPostgres() {
+        LocalDate data = LocalDate.of(2026, 10, 14);
+        UUID reservaId = criarReservaConfirmada(data);
+
+        jdbc.execute("""
+                create function falhar_evento_teste() returns trigger language plpgsql as $$
+                begin
+                    raise exception 'FALHA_CONTROLADA_EVENTO' using errcode = '23514';
+                end $$;
+                """);
+        try {
+            jdbc.execute("""
+                    create trigger falhar_evento_teste after insert on eventos_reserva
+                    for each row execute function falhar_evento_teste()
+                    """);
+            var erro = assertThrows(DataIntegrityViolationException.class, () ->
+                    dataSemFuncionamentoService.cadastrar(adminId,
+                            new CadastroDataSemFuncionamentoRequest(data, "Feriado municipal")));
+            assertTrue(erro.getMostSpecificCause().getMessage().contains("FALHA_CONTROLADA_EVENTO"));
+        } finally {
+            jdbc.execute("drop trigger if exists falhar_evento_teste on eventos_reserva");
+            jdbc.execute("drop function falhar_evento_teste()");
+        }
+
+        transacao.executeWithoutResult(status -> {
+            assertFalse(datasSemFuncionamento.existsByData(data));
+            var reserva = reservas.findById(reservaId).orElseThrow();
+            assertEquals(StatusReserva.CONFIRMADA, reserva.getStatusReserva());
+            assertNull(reserva.getDataHoraCancelamento());
+            assertTrue(eventos.findByReservaIdOrderByDataHoraEventoAscIdAsc(reservaId).isEmpty());
+        });
     }
 
     @Test
@@ -265,6 +333,16 @@ class DataSemFuncionamentoIntegrationTest {
             var reservaSegunda = reservas.findById(reservaSegundaId).orElseThrow();
             assertEquals(StatusReserva.CANCELADA_POR_SUSPENSAO, reservaSegunda.getStatusReserva());
             assertEquals(LocalDateTime.of(2026, 10, 14, 9, 30), reservaSegunda.getDataHoraCancelamento());
+
+            var historico = eventos.findByReservaIdOrderByDataHoraEventoAscIdAsc(reservaSegundaId);
+            assertEquals(1, historico.size());
+            var evento = historico.getFirst();
+            assertEquals(TipoEventoReserva.CANCELAMENTO_POR_SUSPENSAO, evento.getTipoEvento());
+            assertEquals(StatusReserva.CONFIRMADA, evento.getStatusAnterior());
+            assertEquals(reservaSegunda.getStatusReserva(), evento.getStatusNovo());
+            assertEquals(reservaSegunda.getDataHoraCancelamento(), evento.getDataHoraEvento());
+            assertEquals(adminId, evento.getAutorId());
+            assertTrue(evento.getMotivo().contains(quintaBloqueada.toString()));
         });
 
         // Na sexta às 18:00 (janela da segunda aberta), o aluno segue bloqueado pela suspensão estendida
