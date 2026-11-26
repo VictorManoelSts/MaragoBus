@@ -16,7 +16,7 @@ A store impede duplicidade por aluno e data, inclusive cliques repetidos e tenta
 
 ## Página inicial e listagem
 
-A página inicial usa o primeiro nome da sessão quando disponível. A reserva de hoje permanece no card principal até a meia-noite, inclusive com status Cancelada quando aplicável. A primeira reserva futura confirmada aparece em um cartão com a data e o horário de liberação do comprovante. O formulário fica disponível na página inicial durante uma janela aberta para alunos aptos a reservar. Notificações permanece destinada aos avisos administrativos.
+A página inicial usa o primeiro nome da sessão quando disponível. A reserva de hoje permanece no card principal até a meia-noite, inclusive com status Cancelada quando aplicável. A primeira reserva futura confirmada aparece em um cartão com a data e o horário de liberação do comprovante. O formulário fica disponível na página inicial durante uma janela aberta para alunos aptos a reservar. O painel de notificações do cabeçalho permanece dedicado aos avisos administrativos.
 
 Minhas reservas mostra as reservas de hoje primeiro, as futuras da mais próxima à mais distante e as anteriores da mais recente à mais antiga. O controle segmentado filtra por Todas, Confirmadas ou Canceladas. Uma data anterior preserva seu status registrado.
 

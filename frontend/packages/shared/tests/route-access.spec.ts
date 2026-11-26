@@ -14,7 +14,7 @@ import { useSessionStore } from '../src/auth/session'
 import { mountAfterNavigation, syncSessionAccess } from '../src/auth/initialization'
 import type { AuthRole, SessionUser } from '../src/auth/contracts'
 
-const students = ['/', '/comprovante', '/reservar', '/reservas', '/notificacoes', '/perfil']
+const students = ['/', '/comprovante', '/reservar', '/reservas', '/perfil', '/notificacoes', '/avisos']
 const drivers = ['/motorista/reservas', '/motorista/advertencias', '/motorista/perfil']
 const administrators = ['/', '/alunos', '/motoristas', '/faculdades', '/pontos-embarque', '/advertencias', '/perfil', '/cursos', '/cursos-ofertados', '/reservas']
 const roles = ['student', 'driver', 'admin'] as const
@@ -85,7 +85,7 @@ describe.each(roles)('Permissões do perfil %s', role => {
       expect(external).toHaveBeenCalledExactlyOnceWith('http://localhost:5174/')
     } else {
       const allowed = role === 'student' ? students : drivers
-      const destination = path === '/reservar' ? '/' : path
+      const destination = ['/reservar', '/notificacoes', '/avisos'].includes(path) ? '/' : path
       expect(router.currentRoute.value.path).toBe(allowed.includes(destination) ? destination : allowed[0])
       expect(router.currentRoute.value.meta.allowedRoles).toEqual([role])
       expect(external).not.toHaveBeenCalled()
@@ -121,7 +121,8 @@ describe.each(roles)('Permissões do perfil %s', role => {
 describe('Compatibilidade, catálogo e fallback', () => {
   const legacy = [
     { from: '/historico', to: '/reservas', role: 'student' },
-    { from: '/avisos', to: '/notificacoes', role: 'student' },
+    { from: '/avisos', to: '/', role: 'student' },
+    { from: '/notificacoes', to: '/', role: 'student' },
     { from: '/motorista', to: '/motorista/reservas', role: 'driver' },
     { from: '/motorista/faculdades', to: '/motorista/reservas', role: 'driver' },
     { from: '/motorista/passageiros', to: '/motorista/reservas', role: 'driver' },

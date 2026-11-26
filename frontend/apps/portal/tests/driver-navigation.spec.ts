@@ -87,7 +87,7 @@ describe('Navegação do motorista', () => {
       clearDriverDemoSession()
     }
 
-    expect(wrapper.find('header a[href="/notificacoes"]').exists()).toBe(false)
+    expect(wrapper.find('header button[aria-label="Notificações"]').exists()).toBe(false)
     await setMockSession('student')
     await flushPromises()
     expect(wrapper.findComponent(DriverLayout).exists()).toBe(false)
@@ -142,21 +142,21 @@ describe('Navegação do motorista', () => {
 
   it('preserva as rotas e os quatro destinos do aluno ao trocar para sessão de aluno', async () => {
     const { wrapper, router } = await application('/motorista/reservas')
-    expect(wrapper.find('header a[href="/notificacoes"]').exists()).toBe(false)
+    expect(wrapper.find('header button[aria-label="Notificações"]').exists()).toBe(false)
     await setMockSession('student')
-    for (const path of ['/', '/comprovante', '/reservar', '/reservas', '/notificacoes', '/perfil']) {
+    for (const path of ['/', '/comprovante', '/reservar', '/reservas', '/notificacoes', '/avisos', '/perfil']) {
       await router.push(path)
       await flushPromises()
-      const destination = path === '/reservar' ? '/' : path
+      const destination = ['/reservar', '/notificacoes', '/avisos'].includes(path) ? '/' : path
       expect(router.currentRoute.value.path).toBe(destination)
       expect(wrapper.findComponent(DriverLayout).exists()).toBe(false)
       expect(wrapper.findAllComponents(StudentNavigation)).toHaveLength(2)
+      expect(wrapper.find('header button[aria-label="Notificações"]').exists()).toBe(true)
       for (const nav of wrapper.findAllComponents(StudentNavigation)) {
         expect(nav.findAll('a')).toHaveLength(4)
         expect(nav.attributes('aria-label')).toBe('Navegação do aluno')
         const active = nav.find('a[aria-current="page"]')
-        if (destination === '/notificacoes') expect(active.exists()).toBe(false)
-        else expect(active.attributes('href')).toBe(destination)
+        expect(active.attributes('href')).toBe(destination)
       }
     }
   })

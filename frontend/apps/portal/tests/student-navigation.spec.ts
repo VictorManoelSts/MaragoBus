@@ -15,10 +15,6 @@ const destinations = [
   { path: '/reservas', desktop: 'Minhas reservas', mobile: 'Reservas', title: 'Minhas reservas' },
   { path: '/perfil', desktop: 'Meu perfil', mobile: 'Perfil', title: 'Meu perfil' },
 ]
-const pages = [
-  ...destinations,
-  { path: '/notificacoes', title: 'Notificações' },
-]
 const variants = ['desktop', 'mobile'] as const
 
 async function navigation(variant: 'desktop' | 'mobile', path = '/') {
@@ -80,7 +76,7 @@ describe.each(variants)('Navegação do aluno: %s', variant => {
 describe('Integração das páginas do aluno', () => {
   afterEach(() => vi.useRealTimers())
 
-  it.each(pages)('renderiza $path com o layout e título corretos', async ({ path, title }) => {
+  it.each(destinations)('renderiza $path com o layout e título corretos', async ({ path, title }) => {
     vi.setSystemTime(new Date('2026-11-16T14:00:00Z'))
     const { wrapper } = await application(path)
     expect(wrapper.findComponent(StudentLayout).exists()).toBe(true)
@@ -93,22 +89,30 @@ describe('Integração das páginas do aluno', () => {
     const card = wrapper.findComponent(BaseCard)
     if (path === '/reservas') expect(card.text()).toContain('Você ainda não tem reservas.')
     else if (path === '/perfil') expect(card.text()).toContain('Dados do aluno')
-    else if (path === '/notificacoes') expect(card.text()).toContain('Exemplo de comunicado')
     else if (path === '/comprovante') expect(wrapper.get('main p').text()).toContain('Você não tem reservas para hoje')
     else expect(wrapper.get('main').text()).toContain('Reservas fechadas')
     expect(wrapper.get('main p').text().length).toBeGreaterThan(20)
     expect(wrapper.get('main').findAll('input, select, form')).toHaveLength(path === '/perfil' ? 2 : path === '/reservas' ? 3 : 0)
     const buttons = wrapper.get('main').findAll('button').map(button => button.text())
-    if (path === '/notificacoes') expect(buttons).toContain('Marcar todas como lidas')
-    else expect(buttons).toEqual(path === '/perfil' ? ['Salvar ponto padrão', 'Sair'] : [])
+    expect(buttons).toEqual(path === '/perfil' ? ['Salvar ponto padrão', 'Sair'] : [])
   })
 
-  it('mantém Notificações exclusivamente para avisos administrativos enviados aos alunos', async () => {
-    const { wrapper } = await application('/notificacoes')
-    expect(wrapper.get('main p').text()).toBe(
-      'Espaço exclusivo para avisos administrativos enviados aos alunos.',
-    )
-    expect(wrapper.get('main').text()).toContain('Avisos de demonstração.')
+  it('abre os avisos pelo sino e mantém a página atual ativa', async () => {
+    const { wrapper, router } = await application('/reservas')
+    const bell = wrapper.get('header button[aria-label="Notificações"]')
+    expect(bell.attributes('aria-current')).toBeUndefined()
+    await bell.trigger('click')
+    await flushPromises()
+    const panel = document.querySelector('dialog[open], [role="dialog"]')
+      ?? wrapper.find('dialog[open], [role="dialog"]').element
+    expect(panel?.textContent).toContain('Notificações')
+    expect(panel?.textContent).toContain('Exemplo de comunicado sobre o calendário')
+    expect(router.currentRoute.value.path).toBe('/reservas')
+    expect(document.title).toBe('Minhas reservas — MaragoBus')
+    expect(wrapper.get('main h1').text()).toBe('Minhas reservas')
+    for (const nav of wrapper.findAllComponents(StudentNavigation)) {
+      expect(nav.get('a[aria-current="page"]').attributes('href')).toBe('/reservas')
+    }
   })
 
   it('alterna desktop e mobile pelo mesmo breakpoint, sem fixar a barra fora do fluxo', async () => {
@@ -183,7 +187,8 @@ describe('Compatibilidade das rotas do aluno', () => {
   const redirects = [
     { from: '/reservar', to: '/', title: 'Olá, Aluno!' },
     { from: '/historico', to: '/reservas', title: 'Minhas reservas' },
-    { from: '/avisos', to: '/notificacoes', title: 'Notificações' },
+    { from: '/avisos', to: '/', title: 'Olá, Aluno!' },
+    { from: '/notificacoes', to: '/', title: 'Olá, Aluno!' },
   ]
 
   it.each(redirects)('redireciona $from para $to, mantendo a página e os links ativos', async ({ from, to, title }) => {
@@ -193,12 +198,11 @@ describe('Compatibilidade das rotas do aluno', () => {
     for (const nav of wrapper.findAllComponents(StudentNavigation)) {
       expect(nav.findAll('a')).toHaveLength(4)
       const active = nav.find('a[aria-current="page"]')
-      if (to === '/notificacoes') expect(active.exists()).toBe(false)
-      else expect(active.attributes('href')).toBe(to)
+      expect(active.attributes('href')).toBe(to)
       expect(nav.find('a[href="' + from + '"]').exists()).toBe(false)
     }
-    const bell = wrapper.get('header a[href="/notificacoes"]')
-    expect(bell.attributes('aria-current')).toBe(to === '/notificacoes' ? 'page' : undefined)
+    const bell = wrapper.get('header button[aria-label="Notificações"]')
+    expect(bell.attributes('aria-current')).toBeUndefined()
   })
 
   it.each(redirects)('preserva query e hash ao redirecionar $from', async ({ from, to }) => {
@@ -212,7 +216,7 @@ describe('Compatibilidade das rotas do aluno', () => {
     const { router } = await application()
     for (const [name, path] of [
       ['home', '/'], ['reservations', '/reservas'], ['profile', '/perfil'],
-      ['history', '/reservas'], ['announcements', '/notificacoes'],
+      ['history', '/reservas'],
       ['receipt', '/comprovante'], ['new-reservation', '/'],
     ]) {
       await router.push({ name })

@@ -21,7 +21,7 @@ describe('Título e foco do Portal', () => {
 
   it.each([
     { role: 'student', initial: '/reservas', title: 'Minhas reservas', next: '/comprovante', nextTitle: 'Comprovante' },
-    { role: 'student', initial: '/comprovante', title: 'Comprovante', next: '/notificacoes', nextTitle: 'Notificações' },
+    { role: 'student', initial: '/comprovante', title: 'Comprovante', next: '/perfil', nextTitle: 'Meu perfil' },
     { role: 'driver', initial: '/motorista/reservas', title: 'Reservas',
       next: '/motorista/advertencias', nextTitle: 'Solicitações de advertência' },
   ] as const)('atualiza título e foco somente ao trocar de página para $role', async ({
@@ -32,8 +32,7 @@ describe('Título e foco do Portal', () => {
     await router.push(initial)
     const wrapper = mount(App, { attachTo: document.body, global: { plugins: [router] } })
     expect(document.title).toBe(title + ' — MaragoBus')
-    const region = next === '/notificacoes' ? 'header' : 'nav'
-    const link = wrapper.get<HTMLAnchorElement>(region + ' a[href="' + next + '"]')
+    const link = wrapper.get<HTMLAnchorElement>('nav a[href="' + next + '"]')
     const main = wrapper.get('main').element
     expect(document.activeElement).not.toBe(main)
 
