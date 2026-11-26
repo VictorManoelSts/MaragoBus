@@ -24,7 +24,7 @@ public class CorsProperties {
     );
 
     private List<String> allowedHeaders = new ArrayList<>(
-            List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With")
+            List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With", "X-CSRF-TOKEN")
     );
 
     private List<String> exposedHeaders = new ArrayList<>(

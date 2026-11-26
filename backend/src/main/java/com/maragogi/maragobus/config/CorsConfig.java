@@ -1,17 +1,20 @@
 package com.maragogi.maragobus.config;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+import static org.springframework.security.config.Customizer.withDefaults;
 
 @Configuration
 @EnableConfigurationProperties(CorsProperties.class)
-public class CorsConfig implements WebMvcConfigurer {
+public class CorsConfig {
 
     private final CorsProperties corsProperties;
 
@@ -19,21 +22,17 @@ public class CorsConfig implements WebMvcConfigurer {
         this.corsProperties = corsProperties;
     }
 
-    @Override
-    public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/**")
-                .allowedOrigins(corsProperties.getAllowedOrigins().toArray(String[]::new))
-                .allowedMethods(corsProperties.getAllowedMethods().toArray(String[]::new))
-                .allowedHeaders(corsProperties.getAllowedHeaders().toArray(String[]::new))
-                .exposedHeaders(corsProperties.getExposedHeaders().toArray(String[]::new))
-                .allowCredentials(corsProperties.isAllowCredentials())
-                .maxAge(corsProperties.getMaxAgeSeconds());
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+            @Qualifier("corsConfigurationSource") CorsConfigurationSource corsConfigurationSource) throws Exception {
+        return http
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
+                .authorizeHttpRequests(requests -> requests.anyRequest().authenticated())
+                .formLogin(withDefaults())
+                .httpBasic(withDefaults())
+                .build();
     }
 
-    /**
-     * Bean reutilizável pelo Spring Security (http.cors(Customizer.withDefaults()))
-     * quando a camada de autenticação JWT for integrada.
-     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
