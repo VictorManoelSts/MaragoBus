@@ -50,12 +50,19 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
         college, studentCount, driver: null,
       }))
       : [])
+    const canManage = Boolean(driver && schedule === 'open')
     return {
       schedule,
       driver,
       status: distribution?.status,
       colleges,
-      canEdit: Boolean(driver && schedule === 'open' && distribution?.status !== 'PUBLICADA'),
+      canEdit: canManage && distribution?.status !== 'PUBLICADA',
+      canPublish: canManage && distribution?.status === 'RASCUNHO' &&
+        colleges.every(college => college.studentCount === 0 || college.driver),
+      canReopen: canManage && distribution?.status === 'PUBLICADA',
+      publication: distribution?.status === 'PUBLICADA'
+        ? distribution.history.filter(change => change.type === 'published').at(-1)
+        : undefined,
     }
   }
 
