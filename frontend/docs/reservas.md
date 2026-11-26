@@ -18,7 +18,7 @@ A store impede duplicidade por aluno e data, inclusive cliques repetidos e tenta
 
 A página inicial usa o primeiro nome da sessão quando disponível. A reserva de hoje permanece no card principal até a meia-noite, inclusive com status Cancelada quando aplicável. A primeira reserva futura confirmada aparece em um cartão com a data e o horário de liberação do comprovante. O formulário fica disponível na página inicial durante uma janela aberta para alunos aptos a reservar. Notificações permanece destinada aos avisos administrativos.
 
-Minhas reservas mostra as reservas de hoje primeiro, as futuras da mais próxima à mais distante e as anteriores da mais recente à mais antiga. Os filtros cobrem período e os estados Confirmada e Cancelada. Uma data anterior preserva seu status registrado.
+Minhas reservas mostra as reservas de hoje primeiro, as futuras da mais próxima à mais distante e as anteriores da mais recente à mais antiga. O controle segmentado filtra por Todas, Confirmadas ou Canceladas. Uma data anterior preserva seu status registrado.
 
 ## Cancelamento
 
@@ -28,7 +28,7 @@ O aluno pode cancelar a própria reserva confirmada, inclusive futura, até **an
 
 O comprovante está disponível apenas para uma reserva própria e confirmada entre **00h inclusive e a meia-noite seguinte exclusive**, no dia da viagem em Maceió. A abertura às 17h para outra data não oculta o comprovante atual. Para uma viagem futura, a interface informa a disponibilidade a partir das 00h do dia correspondente.
 
-O modal da página inicial e de Minhas reservas revalida sessão, status e data ao abrir. Fecha ao perder a elegibilidade por virada de dia, cancelamento ou troca de sessão. Usa a marca, a data, a faculdade, o ponto, o identificador, o status e o nome disponível da sessão. Exibe **Comprovante demonstrativo — sem validade para embarque** e não gera PDF, QR Code ou código de validação.
+A página inicial e Minhas reservas encaminham para `/comprovante`. A página consulta a reserva do aluno autenticado e reavalia a disponibilidade ao cancelar, trocar de sessão ou mudar a data em Maceió. No dia da viagem, apresenta a marca, a data, o nome do aluno, a faculdade, o ponto de embarque e o status, com o aviso **Comprovante demonstrativo — sem validade para embarque**. Para reservas futuras, informa a data e o horário de liberação. Também apresenta estados de reserva cancelada e ausência de reservas.
 
 ## Consulta do motorista
 

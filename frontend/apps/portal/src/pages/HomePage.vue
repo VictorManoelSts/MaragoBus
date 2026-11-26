@@ -4,8 +4,7 @@ import { RouterLink } from 'vue-router'
 import { CalendarDays, GraduationCap, MapPin } from '@lucide/vue'
 import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseSelect } from '@maragobus/shared'
 import { useSessionStore } from '@maragobus/shared/auth/session'
-import ReservationReceiptModal from '../components/ReservationReceiptModal.vue'
-import { useReservationReceipt } from '../composables/useReservationReceipt'
+import { useTransportClock } from '../composables/useTransportClock'
 import { mockTransportClosures } from '../mocks/transport-closures'
 import { useReservationsStore } from '../stores/reservations'
 import { useStudentDemoStore } from '../stores/student-demo'
@@ -27,7 +26,7 @@ const session = useSessionStore()
 const reservations = useReservationsStore()
 const profile = useStudentProfileStore()
 const demo = useStudentDemoStore()
-const { reference, refresh, receipt, receiptUnavailable, openReceipt, closeReceipt } = useReservationReceipt()
+const { reference, refresh } = useTransportClock()
 const today = computed(() => getTransportDate(reference.value))
 const summary = computed(() => reservations.getHomeSummary(today.value))
 const studentName = computed(() => session.user?.name.trim().split(/\s+/)[0])
@@ -134,10 +133,10 @@ const transportHourFormat = new Intl.DateTimeFormat('pt-BR', {
           </div>
         </dl>
         <div class="mt-3 flex flex-wrap gap-2">
-          <BaseButton
+          <RouterLink
             v-if="getReceiptAvailability(summary.currentReservation, reference) === 'available'"
-            class="w-full sm:w-auto" size="sm" @click="openReceipt(summary.currentReservation.id)"
-          >Ver comprovante</BaseButton>
+            :to="{ name: 'receipt' }" class="mb-button mb-button--primary mb-button--sm w-full sm:w-auto"
+          >Ver comprovante</RouterLink>
           <RouterLink to="/reservas" class="mb-button mb-button--outline mb-button--sm w-full sm:w-auto">Ver minha reserva</RouterLink>
         </div>
       </BaseCard>
@@ -215,8 +214,6 @@ const transportHourFormat = new Intl.DateTimeFormat('pt-BR', {
     <BaseAlert v-else-if="unavailableReason" variant="warning" title="Reserva indisponível">{{ unavailableReason }}</BaseAlert>
 
     <p class="sr-only" role="status">{{ announcement }}</p>
-    <BaseAlert v-if="receiptUnavailable" variant="info">O comprovante desta reserva está indisponível.</BaseAlert>
-    <ReservationReceiptModal :reservation="receipt" @close="closeReceipt" />
   </div>
 </template>
 

@@ -2,25 +2,26 @@
 import { formatCivilDate } from '../utils/format-transport-date'
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal, BaseSelect } from '@maragobus/shared'
-import ReservationReceiptModal from '../components/ReservationReceiptModal.vue'
-import { useReservationReceipt } from '../composables/useReservationReceipt'
+import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal } from '@maragobus/shared'
+import { useTransportClock } from '../composables/useTransportClock'
 import { useReservationsStore } from '../stores/reservations'
 import { getCancellationDeadline, getTransportDate } from '../utils/reservation-availability'
 import { getReceiptAvailability } from '../utils/reservation-receipt'
 
 const store = useReservationsStore()
-const { reference, refresh, receipt, receiptUnavailable, openReceipt, closeReceipt } = useReservationReceipt()
+const { reference, refresh } = useTransportClock()
 const today = computed(() => getTransportDate(reference.value))
-const filter = ref('all')
 const filters = [
   { value: 'all', label: 'Todas' },
-  { value: 'today', label: 'De hoje' },
-  { value: 'future', label: 'Futuras' },
-  { value: 'past', label: 'Anteriores' },
   { value: 'confirmed', label: 'Confirmadas' },
   { value: 'cancelled', label: 'Canceladas' },
-]
+] as const
+const filter = ref<(typeof filters)[number]['value']>('all')
+const emptyMessages = {
+  all: 'Você ainda não tem reservas.',
+  confirmed: 'Você não tem reservas confirmadas.',
+  cancelled: 'Você não tem reservas canceladas.',
+} as const
 const statusLabels = { confirmed: 'Confirmada', cancelled: 'Cancelada' } as const
 const cancellationId = ref<string | null>(null)
 const cancellationTarget = computed(() => store.studentReservations.find(item => item.id === cancellationId.value))
@@ -55,21 +56,19 @@ watch(() => store.studentId, () => {
 
 const groups = computed(() => {
   const date = today.value
-  const status = filter.value === 'confirmed' || filter.value === 'cancelled' ? filter.value : null
   const reservations = store.studentReservations
-    .filter(item => !status || item.status === status)
+    .filter(item => filter.value === 'all' || item.status === filter.value)
     .sort((left, right) => left.travelDate.localeCompare(right.travelDate))
   return [
     { key: 'today', title: 'Hoje', items: reservations.filter(item => item.travelDate === date) },
     { key: 'future', title: 'Futuras', items: reservations.filter(item => item.travelDate > date) },
     { key: 'past', title: 'Anteriores', items: reservations.filter(item => item.travelDate < date).reverse() },
-  ].filter(group => group.items.length > 0 &&
-    (filter.value === 'all' || status || filter.value === group.key))
+  ].filter(group => group.items.length > 0)
 })
 </script>
 
 <template>
-  <div class="min-w-0 space-y-8">
+  <div class="student-reservations min-w-0 space-y-5">
     <div class="space-y-3">
       <h1 ref="pageHeading" tabindex="-1" class="text-page">Minhas reservas</h1>
       <p class="max-w-prose text-helper text-muted">As reservas de demonstração ficam disponíveis até recarregar a aplicação.</p>
@@ -83,70 +82,76 @@ const groups = computed(() => {
         <template v-else>A reserva selecionada não está disponível.</template>
       </p>
     </BaseAlert>
-    <BaseAlert v-if="receiptUnavailable" variant="info">O comprovante desta reserva está indisponível.</BaseAlert>
 
-    <BaseCard v-if="!store.studentReservations.length">
-      <div class="space-y-5">
-        <p class="text-body">Você ainda não tem reservas.</p>
-        <RouterLink :to="{ name: 'home' }" class="mb-button mb-button--primary mb-button--md w-full sm:w-auto">
-          Fazer reserva
-        </RouterLink>
+    <fieldset class="grid w-full min-w-0 max-w-sm grid-cols-3 gap-1 rounded-control border border-line bg-app p-1">
+      <legend class="sr-only">Filtrar reservas por situação</legend>
+      <label v-for="option in filters" :key="option.value" class="min-w-0 cursor-pointer">
+        <input v-model="filter" type="radio" name="reservation-status" :value="option.value" class="peer sr-only">
+        <span
+          class="flex min-h-11 items-center justify-center rounded-control px-1 text-center text-xs text-content wrap-anywhere
+            hover:bg-surface peer-checked:bg-identity peer-checked:font-semibold peer-checked:text-on-primary
+            peer-checked:hover:bg-identity peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2
+            peer-focus-visible:outline-identity sm:text-helper"
+        >{{ option.label }}</span>
+      </label>
+    </fieldset>
+
+    <BaseCard v-if="!groups.length">
+      <div class="space-y-3">
+        <p class="text-body" role="status">{{ emptyMessages[filter] }}</p>
+        <RouterLink
+          v-if="filter === 'all'"
+          :to="{ name: 'home' }" class="mb-button mb-button--primary mb-button--sm w-full sm:w-auto"
+        >Fazer reserva</RouterLink>
       </div>
     </BaseCard>
 
     <template v-else>
-      <div class="sm:max-w-xs">
-        <BaseSelect v-model="filter" label="Filtrar por situação" :options="filters" />
-      </div>
-      <p v-if="!groups.length" role="status" class="text-body text-muted">Nenhuma reserva para o filtro selecionado.</p>
-
-      <section v-for="group in groups" :key="group.key" :aria-labelledby="`reservations-${group.key}`" class="space-y-4">
+      <section v-for="group in groups" :key="group.key" :aria-labelledby="`reservations-${group.key}`" class="space-y-2">
         <h2 :id="`reservations-${group.key}`" class="text-section">{{ group.title }}</h2>
-        <ul class="grid min-w-0 gap-4 lg:grid-cols-2">
+        <ul class="grid min-w-0 gap-3 lg:grid-cols-2">
           <li v-for="reservation in group.items" :key="reservation.id" class="min-w-0">
             <BaseCard>
-              <div class="space-y-4">
-                <div class="flex flex-wrap items-center gap-3">
+              <div class="space-y-2">
+                <div class="flex flex-wrap items-center justify-between gap-2">
                   <time :datetime="reservation.travelDate" class="text-subtitle">
                     {{ formatCivilDate(reservation.travelDate) }}
                   </time>
-                  <BaseBadge :variant="reservation.status === 'cancelled' ? 'warning' : 'neutral'">
+                  <BaseBadge :variant="reservation.status === 'cancelled' ? 'danger' : 'success'">
                     {{ statusLabels[reservation.status] }}
                   </BaseBadge>
                 </div>
-                <dl class="grid min-w-0 gap-3 sm:grid-cols-2">
+                <dl class="grid min-w-0 gap-2 sm:grid-cols-2">
                   <div>
-                    <dt class="text-helper text-muted">Faculdade de destino</dt>
-                    <dd class="text-body">{{ reservation.college }}</dd>
+                    <dt class="text-helper text-muted">Faculdade</dt>
+                    <dd class="text-helper">{{ reservation.college }}</dd>
                   </div>
                   <div>
                     <dt class="text-helper text-muted">Ponto de embarque</dt>
-                    <dd class="text-body">{{ reservation.boardingPoint }}</dd>
+                    <dd class="text-helper">{{ reservation.boardingPoint }}</dd>
                   </div>
                 </dl>
-              </div>
-              <template v-if="reservation.status === 'confirmed'" #footer>
-                <div class="space-y-3">
+                <div v-if="reservation.status === 'confirmed' && reservation.travelDate >= today" class="space-y-2">
                   <p v-if="deadlinePassed(reservation.travelDate)" class="text-helper text-muted">{{ deadlineMessage }}</p>
-                  <div class="flex flex-wrap gap-3">
+                  <div class="flex flex-wrap gap-2">
                     <BaseButton
-                      v-if="!deadlinePassed(reservation.travelDate)" variant="outline"
+                      v-if="!deadlinePassed(reservation.travelDate)" variant="outline" size="sm"
                       class="w-full sm:w-auto" @click="cancellationId = reservation.id"
                     >
                       Cancelar reserva
                     </BaseButton>
-                    <BaseButton
+                    <RouterLink
                       v-if="getReceiptAvailability(reservation, reference) === 'available'"
-                      class="w-full sm:w-auto" @click="openReceipt(reservation.id)"
+                      :to="{ name: 'receipt' }" class="mb-button mb-button--primary mb-button--sm w-full sm:w-auto"
                     >
                       Ver comprovante
-                    </BaseButton>
+                    </RouterLink>
                   </div>
                   <p v-if="getReceiptAvailability(reservation, reference) === 'future'" class="text-helper text-muted">
                     O comprovante estará disponível a partir das 00h do dia da viagem (horário de Alagoas).
                   </p>
                 </div>
-              </template>
+              </div>
             </BaseCard>
           </li>
         </ul>
@@ -174,6 +179,16 @@ const groups = computed(() => {
         </BaseButton>
       </template>
     </BaseModal>
-    <ReservationReceiptModal :reservation="receipt" @close="closeReceipt" />
   </div>
 </template>
+
+<style scoped>
+.student-reservations {
+  --mb-success: #166534;
+  --mb-success-surface: #ecfdf3;
+  --mb-success-border: #78aa89;
+  --mb-danger: #991b1b;
+  --mb-danger-surface: #fef2f2;
+  --mb-danger-border: #d69797;
+}
+</style>

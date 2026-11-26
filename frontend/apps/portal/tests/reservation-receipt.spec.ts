@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { createMemoryHistory } from 'vue-router'
+import { authNavigation } from '@maragobus/shared/auth/navigation'
+import { selectStudentDemo } from '@maragobus/shared/auth/student-demo'
 import { useSessionStore } from '@maragobus/shared/auth/session'
 import App from '../src/App.vue'
 import { getMockReservationForm } from '../src/mocks/reservation-form'
@@ -27,20 +29,17 @@ function confirm(date = travelDate) {
   return confirmed.reservation.id
 }
 
-async function page(path = '/') {
+async function page(path = '/comprovante') {
   const router = createPortalRouter(createMemoryHistory())
   await router.push(path)
   await router.isReady()
-  return mount(App, { global: { plugins: [router] } })
-}
-
-function openDialog() {
-  return document.querySelector('dialog[open]')
+  return { router, wrapper: mount(App, { global: { plugins: [router] } }) }
 }
 
 describe('Comprovante de reserva', () => {
   beforeEach(async () => { await setMockSession('student') })
   afterEach(() => {
+    selectStudentDemo(null)
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
@@ -56,77 +55,142 @@ describe('Comprovante de reserva', () => {
     expect(getReceiptAvailability({ travelDate, status: 'cancelled' }, new Date(instant))).toBe('unavailable')
   })
 
-  it('preserva o comprovante atual e o aviso futuro após as 17h', async () => {
-    const id = confirm()
-    clock('2026-11-17T20:00:00Z')
+  it.each(['/', '/reservas'])('navega de %s para a página exclusiva', async path => {
+    confirm()
+    const { router, wrapper } = await page(path)
+    await wrapper.get('main a[href="/comprovante"]').trigger('click')
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/comprovante'))
+    const main = wrapper.get('main')
+    expect(main.get('h1').text()).toBe('Comprovante')
+    expect(main.get('img').attributes('alt')).toBe('MaragoBus')
+    expect(main.get('time').attributes('datetime')).toBe(travelDate)
+    expect(main.text()).toContain('Reserva confirmada')
+    expect(main.text()).toContain('Comprovante demonstrativo — sem validade para embarque')
+    expect(main.findAll('dd').map(item => item.text())).toEqual([
+      'Aluno de Teste', 'Faculdade de Demonstração', 'Praça de exemplo — Centro',
+    ])
+    expect(main.find('dialog').exists()).toBe(false)
+  })
+
+  it('preserva o comprovante após as 17h e troca para o próximo somente à meia-noite', async () => {
+    confirm()
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+    clock('2026-11-17T19:59:59.999Z')
+    const { wrapper } = await page()
+    const main = wrapper.get('main')
+    vi.advanceTimersByTime(1)
+    await nextTick()
+    expect(main.get('time').attributes('datetime')).toBe(travelDate)
+
     expect(useReservationsStore().confirm({
       travelDate: '2026-11-18', boardingPointId: 'demo-south', closures: [],
       context: getMockReservationForm('mock-student-test'),
     }).status).toBe('confirmed')
-    const wrapper = await page()
-    expect(wrapper.get('main section[aria-labelledby="next-reservation-title"]').text()).toContain('a partir das 00h')
-    expect(wrapper.get('main time').attributes('datetime')).toBe(travelDate)
-    await wrapper.get('main button').trigger('click')
-    const dialog = openDialog()
-    expect(dialog?.querySelector('img')?.alt).toBe('MaragoBus')
-    expect(dialog?.textContent).toContain('Comprovante demonstrativo — sem validade para embarque')
-    expect(dialog?.textContent).toContain('Aluno de Teste')
-    expect(dialog?.textContent).toContain('Faculdade de Demonstração')
-    expect(dialog?.textContent).toContain('Praça de exemplo — Centro')
-    expect(dialog?.textContent).toContain(id)
-    expect(dialog?.textContent).toContain('Confirmada')
-    expect(dialog?.querySelector('time')?.dateTime).toBe(travelDate)
+    await nextTick()
+    expect(main.get('time').attributes('datetime')).toBe(travelDate)
+    expect(main.text()).toContain('Praça de exemplo — Centro')
+
+    clock('2026-11-18T02:59:59.999Z')
+    document.dispatchEvent(new Event('visibilitychange'))
+    expect(main.get('time').attributes('datetime')).toBe(travelDate)
+    vi.advanceTimersByTime(1)
+    await nextTick()
+    expect(main.get('time').attributes('datetime')).toBe('2026-11-18')
+    expect(main.text()).not.toContain('Praça de exemplo — Centro')
   })
 
-  it('habilita a ação automaticamente à meia-noite e fecha o modal quando o dia expira', async () => {
+  it('informa a liberação futura, exibe o comprovante na virada e o retira ao expirar', async () => {
     confirm()
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
     clock('2026-11-17T02:59:59.999Z')
-    const wrapper = await page('/reservas')
-    expect(wrapper.get('main').text()).toContain('a partir das 00h')
-    expect(wrapper.findAll('main button').map(button => button.text())).toEqual(['Cancelar reserva'])
+    const { wrapper } = await page()
+    const main = wrapper.get('main')
+    expect(main.text()).toContain('17/11/2026 às 00h (horário de Alagoas)')
+    expect(main.find('dl').exists()).toBe(false)
     vi.advanceTimersByTime(1)
     await nextTick()
-    await wrapper.findAll('main button').find(button => button.text() === 'Ver comprovante')!.trigger('click')
-    expect(openDialog()).not.toBeNull()
+    expect(main.find('dl').exists()).toBe(true)
     clock('2026-11-18T02:59:00.000Z')
     vi.advanceTimersByTime(60_000)
     await nextTick()
-    expect(openDialog()).toBeNull()
-    expect(wrapper.findAll('main button')).toHaveLength(0)
+    expect(main.text()).toContain('Você não tem reservas para hoje')
+    expect(main.find('dl, time').exists()).toBe(false)
   })
 
-  it('revalida ao clicar em um botão desatualizado depois da virada do dia', async () => {
+  it('revalida ao seguir um link desatualizado depois da virada do dia', async () => {
     confirm()
-    const wrapper = await page()
-    const button = wrapper.get('main button')
+    const { router, wrapper } = await page()
+    await router.push('/')
+    const link = wrapper.get('main a[href="/comprovante"]')
     clock('2026-11-18T03:00:00Z')
-    await button.trigger('click')
-    expect(openDialog()).toBeNull()
-    expect(wrapper.get('main').text()).toContain('O comprovante desta reserva está indisponível.')
+    await link.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('main').text()).toContain('Você não tem reservas para hoje')
+    expect(wrapper.find('main dd').exists()).toBe(false)
   })
 
-  it('limita a consulta por ID ao aluno e elimina o acesso ao cancelar ou trocar de sessão', async () => {
+  it('isola os dados ao trocar de aluno e retira os detalhes após cancelamento', async () => {
     const id = confirm()
     const store = useReservationsStore()
-    const wrapper = await page()
-    await wrapper.get('main button').trigger('click')
-    expect(openDialog()).not.toBeNull()
+    const { wrapper } = await page('/comprovante?id=' + id)
+    const main = wrapper.get('main')
+    expect(main.find('dl').exists()).toBe(true)
 
     useSessionStore().user = { id: 'outro-aluno', name: 'Outro aluno', role: 'student' }
     await nextTick()
     expect(store.getReceiptReservation(id, new Date())).toBeUndefined()
-    expect(openDialog()).toBeNull()
-    expect(document.body.textContent).not.toContain(id)
+    expect(main.text()).toContain('Você não tem reservas para hoje')
+    expect(main.find('dl').exists()).toBe(false)
 
     await setMockSession('student')
     await flushPromises()
-    await wrapper.get('main button').trigger('click')
+    expect(main.text()).toContain('Aluno de Teste')
     expect(store.cancel(id)).toBe('cancelled')
     await nextTick()
     expect(store.getReceiptReservation(id, new Date())).toBeUndefined()
-    expect(openDialog()).toBeNull()
-    expect(wrapper.find('main button').exists()).toBe(false)
+    expect(main.text()).toContain('A reserva de 17/11/2026 foi cancelada')
+    expect(main.find('dl').exists()).toBe(false)
+  })
+
+  it('distingue o cancelamento futuro de uma conta sem reservas', async () => {
+    const id = confirm()
+    clock('2026-11-17T02:59:00Z')
+    expect(useReservationsStore().cancel(id)).toBe('cancelled')
+    const { wrapper } = await page()
+    expect(wrapper.get('main').text()).toContain('A reserva de 17/11/2026 foi cancelada')
+    expect(wrapper.find('main dl').exists()).toBe(false)
+  })
+
+  it.each(['anonymous', 'driver'] as const)('protege a rota contra %s', async role => {
+    confirm()
+    const session = useSessionStore()
+    if (role === 'anonymous') await session.logout()
+    else await setMockSession(role)
+    const { router, wrapper } = await page()
+    expect(router.currentRoute.value.path).toBe(role === 'driver' ? '/motorista/reservas' : '/login')
+    expect(wrapper.text()).not.toContain('Comprovante demonstrativo')
+  })
+
+  it('bloqueia o comprovante para o administrador e o encaminha ao Admin', async () => {
+    const { router, wrapper } = await page('/')
+    const openExternal = vi.spyOn(authNavigation, 'openExternal').mockImplementation(() => {})
+    await setMockSession('admin')
+    await router.push('/comprovante')
+    expect(router.currentRoute.value.path).toBe('/')
+    expect(openExternal).toHaveBeenCalledWith('http://localhost:5174/')
+    expect(wrapper.find('main').exists()).toBe(false)
+  })
+
+  it.each([
+    ['prazo-encerrado', 'Comprovante demonstrativo'],
+    ['cancelada', 'foi cancelada'],
+    ['sem-reserva', 'Você não tem reservas para hoje'],
+  ])('apresenta o cenário demonstrativo %s', async (scenario, message) => {
+    const { router, wrapper } = await page(`/demo-aluno?cenario=${scenario}`)
+    await useSessionStore().login({ cpf: '90000000175', password: 'AlunoTeste!53' })
+    await router.push('/comprovante')
+    expect(wrapper.get('main').text()).toContain(message)
   })
 })

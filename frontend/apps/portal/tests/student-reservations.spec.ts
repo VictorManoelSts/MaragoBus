@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory } from 'vue-router'
+import { selectStudentDemo } from '@maragobus/shared/auth/student-demo'
 import { useSessionStore } from '@maragobus/shared/auth/session'
 import App from '../src/App.vue'
 import HomePage from '../src/pages/HomePage.vue'
@@ -36,13 +37,20 @@ describe('Minhas reservas', () => {
     await setMockSession('student')
     vi.setSystemTime(reference)
   })
-  afterEach(() => { vi.useRealTimers() })
+  afterEach(() => {
+    selectStudentDemo(null)
+    vi.useRealTimers()
+  })
 
   it('mostra o estado vazio, explica a demonstração e oferece acesso a Fazer reserva', async () => {
     const { router, wrapper } = await page()
     expect(wrapper.get('main').text()).toContain('até recarregar')
     expect(wrapper.get('main').text()).toContain('Você ainda não tem reservas.')
-    expect(wrapper.find('main select').exists()).toBe(false)
+    await wrapper.get('input[value="confirmed"]').setValue()
+    expect(wrapper.get('main [role="status"]').text()).toBe('Você não tem reservas confirmadas.')
+    await wrapper.get('input[value="cancelled"]').setValue()
+    expect(wrapper.get('main [role="status"]').text()).toBe('Você não tem reservas canceladas.')
+    await wrapper.get('input[value="all"]').setValue()
     await wrapper.get('main a').trigger('click')
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/'))
   })
@@ -67,33 +75,90 @@ describe('Minhas reservas', () => {
     expect(wrapper.get('main time').attributes('datetime')).toBe('2026-11-18')
   })
 
-  it('filtra por período e pelo status suportado e informa quando não há resultados', async () => {
+  it('oferece três rádios nativos rotulados e exibe apenas os status selecionados', async () => {
+    confirm('2026-11-17')
+    confirm('2026-11-18')
+    expect(useReservationsStore().cancel(useReservationsStore().findConfirmed('2026-11-18')!.id)).toBe('cancelled')
+    vi.setSystemTime(reference)
+    const { wrapper } = await page()
+    const group = wrapper.get('main fieldset')
+    const radios = group.findAll<HTMLInputElement>('input[type="radio"]')
+    expect(group.get('legend').text()).toBe('Filtrar reservas por situação')
+    expect(group.findAll('label').map(label => label.text())).toEqual(['Todas', 'Confirmadas', 'Canceladas'])
+    expect(radios.map(radio => radio.element.name)).toEqual(Array(3).fill('reservation-status'))
+    expect(radios.map(radio => radio.element.checked)).toEqual([true, false, false])
+    radios[0]!.element.focus()
+    expect(document.activeElement).toBe(radios[0]!.element)
+    expect(wrapper.find('main select').exists()).toBe(false)
+    expect(wrapper.findAll('main li')).toHaveLength(2)
+
+    await group.get('input[value="confirmed"]').setValue()
+    expect(radios.map(radio => radio.element.checked)).toEqual([false, true, false])
+    expect(wrapper.get('main li .mb-feedback--success').text()).toBe('Confirmada')
+    expect(wrapper.findAll('main li')).toHaveLength(1)
+
+    await group.get('input[value="cancelled"]').setValue()
+    expect(radios.map(radio => radio.element.checked)).toEqual([false, false, true])
+    expect(wrapper.get('main li .mb-feedback--danger').text()).toBe('Cancelada')
+    expect(wrapper.findAll('main li')).toHaveLength(1)
+
+    await group.get('input[value="all"]').setValue()
+    expect(wrapper.findAll('main li')).toHaveLength(2)
+  })
+
+  it('oferece o comprovante apenas na reserva confirmada de hoje e acompanha a meia-noite', async () => {
+    confirm('2026-11-13')
     confirm('2026-11-17')
     confirm('2026-11-18')
     vi.setSystemTime(reference)
     const { wrapper } = await page()
-    const select = wrapper.get('main select')
-    expect(select.findAll('option').filter(option => option.attributes('disabled') === undefined).map(option => option.text()))
-      .toEqual(['Todas', 'De hoje', 'Futuras', 'Anteriores', 'Confirmadas', 'Canceladas'])
-    await select.setValue('future')
-    expect(wrapper.findAll('main h2').map(title => title.text())).toEqual(['Futuras'])
-    await select.setValue('today')
-    expect(wrapper.get('main h2').text()).toBe('Hoje')
-    await select.setValue('past')
-    expect(wrapper.get('main [role="status"]').text()).toContain('Nenhuma reserva para o filtro')
-    await select.setValue('confirmed')
-    expect(wrapper.findAll('main time')).toHaveLength(2)
+    const links = 'main a[href="/comprovante"]'
+    expect(wrapper.get('#reservations-today').text()).toBe('Hoje')
+    expect(wrapper.findAll(links)).toHaveLength(1)
+    expect(wrapper.get('section[aria-labelledby="reservations-today"] a[href="/comprovante"]').text()).toBe('Ver comprovante')
+    expect(wrapper.get('section[aria-labelledby="reservations-future"]').text()).toContain('a partir das 00h')
+
+    vi.setSystemTime(new Date('2026-11-18T03:00:00Z'))
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flushPromises()
+    expect(wrapper.findAll(links)).toHaveLength(1)
+    expect(wrapper.get('section[aria-labelledby="reservations-today"] time').attributes('datetime')).toBe('2026-11-18')
+    const store = useReservationsStore()
+    expect(store.cancel(store.findConfirmed('2026-11-18')!.id)).toBe('cancelled')
+    await flushPromises()
+    expect(wrapper.find(links).exists()).toBe(false)
+    expect(wrapper.get('section[aria-labelledby="reservations-today"]').text()).toContain('Cancelada')
+  })
+
+  it('renderiza o histórico demonstrativo completo e filtra a reserva cancelada', async () => {
+    vi.setSystemTime(new Date('2026-11-16T13:00:00Z'))
+    const { router, wrapper } = await page('/demo-aluno?cenario=completo')
+    await useSessionStore().login({ cpf: '90000000175', password: 'AlunoTeste!53' })
+    await router.push('/reservas')
+    expect(wrapper.findAll('main time').map(time => time.attributes('datetime'))).toEqual([
+      '2026-11-16', '2026-11-17', '2026-11-13', '2026-11-12',
+    ])
+    await wrapper.get('input[value="confirmed"]').setValue()
+    expect(wrapper.findAll('main li')).toHaveLength(3)
+    await wrapper.get('input[value="cancelled"]').setValue()
+    expect(wrapper.findAll('main li')).toHaveLength(1)
+    expect(wrapper.get('main time').attributes('datetime')).toBe('2026-11-12')
   })
 
   it('acompanha novas confirmações e apresenta apenas as reservas da sessão atual', async () => {
     const { wrapper } = await page()
     confirm('2026-11-17', 'Faculdade do primeiro aluno')
+    document.dispatchEvent(new Event('visibilitychange'))
     await flushPromises()
     expect(wrapper.get('main').text()).toContain('Faculdade do primeiro aluno')
+    await wrapper.get('main li button').trigger('click')
+    expect(cancellationDialog().get('time').attributes('datetime')).toBe('2026-11-17')
     useSessionStore().user = { id: 'outro-aluno', name: 'Outro aluno', role: 'student' }
     await flushPromises()
     expect(wrapper.get('main').text()).toContain('Você ainda não tem reservas.')
     expect(wrapper.get('main').text()).not.toContain('Faculdade do primeiro aluno')
+    expect(document.querySelector('dialog[open]')).toBeNull()
+    expect(wrapper.find('main a[href="/comprovante"]').exists()).toBe(false)
     confirm('2026-11-17', 'Faculdade do segundo aluno')
     await flushPromises()
     expect(wrapper.get('main').text()).toContain('Faculdade do segundo aluno')
@@ -118,7 +183,8 @@ describe('Minhas reservas', () => {
     const { router, wrapper } = await page()
     const home = mount(HomePage, { global: { plugins: [router] } })
     expect(home.get('section').text()).toContain('Confirmada')
-    const opener = wrapper.get<HTMLButtonElement>('main button')
+    await wrapper.get('input[value="confirmed"]').setValue()
+    const opener = wrapper.get<HTMLButtonElement>('main li button')
     opener.element.focus()
     await opener.trigger('click')
     expect(cancellationDialog().get('time').attributes('datetime')).toBe('2026-11-17')
@@ -132,12 +198,12 @@ describe('Minhas reservas', () => {
     expect(wrapper.get('main [role="status"]').text()).toContain('Reserva de demonstração cancelada.')
     expect(opener.element.isConnected).toBe(false)
     expect(document.activeElement).toBe(wrapper.get('main [role="status"] p').element)
-    expect(wrapper.get('main li').text()).toContain('Cancelada')
+    expect(wrapper.find('main li').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Você não tem reservas confirmadas.')
     expect(wrapper.find('main button').exists()).toBe(false)
     expect(home.get('section').text()).toContain('Cancelada')
-    await wrapper.get('main select').setValue('confirmed')
-    expect(wrapper.find('main li').exists()).toBe(false)
-    await wrapper.get('main select').setValue('cancelled')
+    await wrapper.get('input[value="cancelled"]').setValue()
+    expect(wrapper.get('main li').text()).toContain('Cancelada')
     expect(wrapper.get('main li').text()).toContain('Faculdade de teste')
   })
 
@@ -151,6 +217,7 @@ describe('Minhas reservas', () => {
     expect(useReservationsStore().studentReservations[0]?.status).toBe('confirmed')
     expect(wrapper.get('main [role="status"]').text()).toContain('Prazo de cancelamento encerrado')
     expect(wrapper.get('main li').text()).toContain('às 16h')
-    expect(wrapper.findAll('main button').map(button => button.text())).toEqual(['Ver comprovante'])
+    expect(wrapper.findAll('main button')).toHaveLength(0)
+    expect(wrapper.get('main a[href="/comprovante"]').text()).toBe('Ver comprovante')
   })
 })
