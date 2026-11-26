@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatCivilDate } from '../utils/format-transport-date'
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal, BaseSelect } from '@maragobus/shared'
@@ -21,7 +22,6 @@ const filters = [
   { value: 'cancelled', label: 'Canceladas' },
 ]
 const statusLabels = { confirmed: 'Confirmada', cancelled: 'Cancelada' } as const
-const dateFormat = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeZone: 'UTC' })
 const cancellationId = ref<string | null>(null)
 const cancellationTarget = computed(() => store.studentReservations.find(item => item.id === cancellationId.value))
 const cancellationResult = ref<ReturnType<typeof store.cancel> | null>(null)
@@ -108,7 +108,7 @@ const groups = computed(() => {
               <div class="space-y-4">
                 <div class="flex flex-wrap items-center gap-3">
                   <time :datetime="reservation.travelDate" class="text-subtitle">
-                    {{ dateFormat.format(new Date(`${reservation.travelDate}T00:00:00Z`)) }}
+                    {{ formatCivilDate(reservation.travelDate) }}
                   </time>
                   <BaseBadge :variant="reservation.status === 'cancelled' ? 'warning' : 'neutral'">
                     {{ statusLabels[reservation.status] }}
@@ -160,7 +160,7 @@ const groups = computed(() => {
       <template v-if="cancellationTarget">
         <p>
           Deseja cancelar a reserva de
-          <time :datetime="cancellationTarget.travelDate">{{ dateFormat.format(new Date(`${cancellationTarget.travelDate}T00:00:00Z`)) }}</time>?
+          <time :datetime="cancellationTarget.travelDate">{{ formatCivilDate(cancellationTarget.travelDate) }}</time>?
         </p>
         <p v-if="deadlinePassed(cancellationTarget.travelDate)" class="mt-3 text-helper text-muted">{{ deadlineMessage }}</p>
       </template>

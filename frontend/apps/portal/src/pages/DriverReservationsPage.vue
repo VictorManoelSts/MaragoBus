@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatCivilDate } from '../utils/format-transport-date'
 import { computed, nextTick, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Building2, ChevronDown, ChevronRight, UserRound } from '@lucide/vue'
@@ -42,7 +43,6 @@ const reasonInput = ref<HTMLTextAreaElement>()
 const errorFeedback = ref<HTMLElement>()
 const successFeedback = ref<HTMLElement>()
 const pageHeading = ref<HTMLElement>()
-const dateFormat = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeZone: 'UTC' })
 
 function closeWarning() {
   warningOpen.value = false
@@ -197,7 +197,7 @@ watch(() => warningRequests.driverId, () => {
           <div><dt class="text-helper text-muted">Aluno</dt><dd>{{ warningTarget.studentName || 'Nome indisponível' }}</dd></div>
           <div>
             <dt class="text-helper text-muted">Data da viagem</dt>
-            <dd><time :datetime="date">{{ dateFormat.format(new Date(`${date}T00:00:00Z`)) }}</time></dd>
+            <dd><time :datetime="date">{{ formatCivilDate(date) }}</time></dd>
           </div>
         </dl>
         <div class="mb-field">

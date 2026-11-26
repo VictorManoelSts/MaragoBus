@@ -386,18 +386,19 @@ describe('Histórico de alterações da distribuição', () => {
 
     await historyCard().get('summary').trigger('click')
     expect(historyCard().element.open).toBe(true)
-    expect(store.create(date)).toBe('created')
+    expect(store.publish(date)).toBe('published')
     await nextTick()
     expect(historyCard().element.open).toBe(true)
-    expect(historyCard().get('summary').text()).toContain('1 alteração')
-    expect(historyCard().get('ol li').text()).toContain('Criação')
+    expect(historyCard().get('summary').text()).toContain('2 alterações')
+    expect(historyCard().get('ol').text()).toContain('Criação')
+    expect(historyCard().get('ol').text()).toContain('Publicação')
 
     await dateInput.setValue('2026-11-17')
     expect(historyCard().element.open).toBe(false)
     expect(historyCard().text()).toContain('Nenhuma alteração registrada para esta data.')
     await dateInput.setValue(date)
     expect(historyCard().element.open).toBe(false)
-    expect(historyCard().get('ol li').text()).toContain('Criação')
+    expect(historyCard().get('ol').text()).toContain('Criação')
 
     await dateInput.setValue('')
     expect(organization.find('details').exists()).toBe(false)

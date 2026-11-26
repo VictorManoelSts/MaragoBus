@@ -87,12 +87,13 @@ describe('Integração das páginas do aluno', () => {
     expect(wrapper.get('header img').attributes('src')).toContain('logo-horizontal.svg')
     expect(wrapper.findAllComponents(StudentNavigation)).toHaveLength(2)
     const card = wrapper.findComponent(BaseCard)
-    if (path === '/reservar') expect(card.text()).toContain('Resumo da seleção')
-    else if (path === '/reservas') expect(card.text()).toContain('Você ainda não tem reservas.')
+    if (path === '/reservar') {
+      expect(card.text()).toContain('Resumo da seleção')
+      expect(wrapper.get('main').text()).not.toContain('será implementado posteriormente')
+    } else if (path === '/reservas') expect(card.text()).toContain('Você ainda não tem reservas.')
     else if (path === '/perfil') expect(card.text()).toContain('Dados do aluno')
     else if (path === '/notificacoes') expect(card.text()).toContain('Exemplo de comunicado')
-    else expect(card.text()).toBe(path === '/' ? 'Sua reserva atualVocê não tem uma reserva atual para apresentar.Fazer reserva'
-      : 'Esta funcionalidade será implementada posteriormente.')
+    else expect(card.text()).toBe('Sua reserva atualVocê não tem uma reserva atual para apresentar.Fazer reserva')
     expect(wrapper.get('main p').text().length).toBeGreaterThan(20)
     expect(wrapper.get('main').findAll('input, select, form')).toHaveLength(path === '/perfil' ? 2 : path === '/reservar' ? 1 : 0)
     const buttons = wrapper.get('main').findAll('button').map(button => button.text())

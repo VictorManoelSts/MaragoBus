@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { BaseBadge, BaseCard, BaseSelect } from '@maragobus/shared'
 import { useWarningRequestsStore, warningRequestLabels } from '../stores/warning-requests'
-import { transportTimeZone } from '../utils/reservation-availability'
+import { formatCivilDate, formatTransportDateTime } from '../utils/format-transport-date'
 
 const store = useWarningRequestsStore()
 const status = ref('all')
@@ -12,10 +12,6 @@ const statusOptions = [
   ...Object.entries(warningRequestLabels).map(([value, label]) => ({ value, label })),
 ]
 const filtered = computed(() => store.ownRequests.filter(item => status.value === 'all' || item.status === status.value))
-const travelDateFormat = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeZone: 'UTC' })
-const createdAtFormat = new Intl.DateTimeFormat('pt-BR', {
-  dateStyle: 'short', timeStyle: 'short', timeZone: transportTimeZone,
-})
 </script>
 
 <template>
@@ -47,11 +43,11 @@ const createdAtFormat = new Intl.DateTimeFormat('pt-BR', {
           <dl class="mt-3 space-y-3">
             <div>
               <dt class="text-helper text-muted">Data da viagem</dt>
-              <dd><time :datetime="item.travelDate">{{ travelDateFormat.format(new Date(`${item.travelDate}T00:00:00Z`)) }}</time></dd>
+              <dd><time :datetime="item.travelDate">{{ formatCivilDate(item.travelDate) }}</time></dd>
             </div>
             <div>
               <dt class="text-helper text-muted">Enviada em (horário de Alagoas)</dt>
-              <dd><time :datetime="item.createdAt">{{ createdAtFormat.format(new Date(item.createdAt)) }}</time></dd>
+              <dd><time :datetime="item.createdAt">{{ formatTransportDateTime(item.createdAt) }}</time></dd>
             </div>
             <div>
               <dt class="text-helper text-muted">Motivo</dt>

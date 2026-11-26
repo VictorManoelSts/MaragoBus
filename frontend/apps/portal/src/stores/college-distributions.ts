@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
-import { shallowReactive } from 'vue'
+import { computed, shallowReactive, watch } from 'vue'
 import { isSessionUser, type SessionUser } from '@maragobus/shared/auth/contracts'
-import { useSessionStore } from '@maragobus/shared/auth/session'
+import { driverDemoEnabled } from '@maragobus/shared/auth/driver-demo'
+import { isDemoDriver } from '@maragobus/shared/auth/mock-drivers'
 import type {
   CollegeDistribution, DistributionChange, DistributionDriver, DistributionStatus,
 } from '../types/college-distribution'
@@ -24,9 +25,15 @@ function driverIdentity({ id, name }: SessionUser): DistributionDriver {
 }
 
 export const useCollegeDistributionsStore = defineStore('college-distributions', () => {
-  const session = useSessionStore()
   const reservations = useReservationsStore()
-  const records = shallowReactive(new Map<TravelDate, DistributionRecord>())
+  const regularRecords = shallowReactive(new Map<TravelDate, DistributionRecord>())
+  const demoRecords = shallowReactive(new Map<TravelDate, DistributionRecord>())
+  if (import.meta.env.DEV && !import.meta.env.PROD) {
+    watch(driverDemoEnabled, active => {
+      if (!active) demoRecords.clear()
+    }, { flush: 'sync' })
+  }
+  const records = computed(() => reservations.demoDriver ? demoRecords : regularRecords)
 
   function getSchedule(travelDate: TravelDate, now: Date) {
     if (!/^\d{4,}-\d{2}-\d{2}$/.test(travelDate)) return 'no-date'
@@ -36,14 +43,9 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
     return now < getReservationClosingTime(travelDate) ? 'before-closing' : 'open'
   }
 
-  function currentDriver() {
-    const user = session.user
-    return session.authenticated && user?.role === 'driver' ? user : undefined
-  }
-
   function getOrganization(travelDate: TravelDate, now: Date) {
     const schedule = getSchedule(travelDate, now)
-    const driver = currentDriver()
+    const driver = reservations.driver
     const distribution = getDistribution(travelDate)
     const colleges = distribution?.colleges ?? (driver
       ? Array.from(reservations.countConfirmedByCollege(travelDate), ([college, studentCount]) => ({
@@ -67,8 +69,8 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
   }
 
   function getDistribution(travelDate: TravelDate): CollegeDistribution | undefined {
-    if (!currentDriver()) return
-    const record = records.get(travelDate)
+    if (!reservations.driver) return
+    const record = records.value.get(travelDate)
     if (!record) return
 
     const counts = reservations.countConfirmedByCollege(travelDate)
@@ -87,7 +89,7 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
   }
 
   function authorize(travelDate: TravelDate) {
-    const user = currentDriver()
+    const user = reservations.driver
     if (!user) return 'driver-required'
     const now = new Date()
     if (getSchedule(travelDate, now) !== 'open') return 'outside-window'
@@ -95,7 +97,7 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
   }
 
   function hasUnassignedColleges(travelDate: TravelDate) {
-    const assignments = records.get(travelDate)?.assignments
+    const assignments = records.value.get(travelDate)?.assignments
     return Array.from(reservations.countConfirmedByCollege(travelDate).keys())
       .some(college => !assignments?.has(college))
   }
@@ -109,24 +111,16 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
   }
 
   function save(travelDate: TravelDate, record: DistributionRecord, change: DistributionChange) {
-    records.set(travelDate, {
+    records.value.set(travelDate, {
       ...record,
       history: Object.freeze([...record.history, Object.freeze(change)]),
     })
   }
 
-  function create(travelDate: TravelDate) {
-    const audit = authorize(travelDate)
-    if (typeof audit === 'string') return audit
-    if (records.has(travelDate)) return 'already-exists'
-    records.set(travelDate, newDraft(audit))
-    return 'created'
-  }
-
   function editCollege(travelDate: TravelDate, edit: CollegeEdit, createDraft = false) {
     const audit = authorize(travelDate)
     if (typeof audit === 'string') return audit
-    const existing = records.get(travelDate)
+    const existing = records.value.get(travelDate)
     const record = existing ?? (createDraft ? newDraft(audit) : undefined)
     if (!record) return 'not-found'
     if (record.status !== 'RASCUNHO') return 'not-draft'
@@ -141,6 +135,8 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
       return type
     }
     if (!isSessionUser(edit.driver) || edit.driver.role !== 'driver') return 'invalid-driver'
+    if (import.meta.env.DEV && !import.meta.env.PROD &&
+      isDemoDriver(edit.driver.id) !== reservations.demoDriver) return 'invalid-driver'
     if (type === 'assigned') {
       if (previousDriver) return 'already-assigned'
       if (!reservations.countConfirmedByCollege(travelDate).has(college)) return 'college-not-found'
@@ -173,7 +169,7 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
   function publish(travelDate: TravelDate) {
     const audit = authorize(travelDate)
     if (typeof audit === 'string') return audit
-    const record = records.get(travelDate)
+    const record = records.value.get(travelDate)
     if (record?.status === 'PUBLICADA') return 'not-draft'
     if (hasUnassignedColleges(travelDate)) return 'unassigned-colleges'
     save(travelDate, { ...(record ?? newDraft(audit)), status: 'PUBLICADA' }, { ...audit, type: 'published' })
@@ -183,12 +179,12 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
   function reopen(travelDate: TravelDate) {
     const audit = authorize(travelDate)
     if (typeof audit === 'string') return audit
-    const record = records.get(travelDate)
+    const record = records.value.get(travelDate)
     if (!record) return 'not-found'
     if (record.status !== 'PUBLICADA') return 'not-published'
     save(travelDate, { ...record, status: 'RASCUNHO' }, { ...audit, type: 'reopened' })
     return 'reopened'
   }
 
-  return { getDistribution, getOrganization, create, assign, remove, transfer, publish, reopen }
+  return { getDistribution, getOrganization, assign, remove, transfer, publish, reopen }
 })

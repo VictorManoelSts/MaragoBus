@@ -94,6 +94,7 @@ describe('Página inicial do aluno', () => {
     document.dispatchEvent(new Event('visibilitychange'))
     await flushPromises()
     expect(wrapper.get('time').attributes('datetime')).toBe('2026-11-13')
+    expect(wrapper.get('time').text()).toBe('13/11/2026')
     expect(wrapper.find('[role="status"]').exists()).toBe(false)
   })
 

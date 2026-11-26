@@ -1,6 +1,7 @@
-import { computed, shallowRef } from 'vue'
+import { computed, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { useSessionStore } from '@maragobus/shared/auth/session'
+import { driverDemoEnabled } from '@maragobus/shared/auth/driver-demo'
+import { isDemoDriver } from '@maragobus/shared/auth/mock-drivers'
 import type { TravelDate } from '../types/reservation-availability'
 import { useReservationsStore } from './reservations'
 
@@ -23,11 +24,14 @@ interface WarningRequest {
 }
 
 export const useWarningRequestsStore = defineStore('warning-requests', () => {
-  const session = useSessionStore()
   const reservations = useReservationsStore()
   const requests = shallowRef<WarningRequest[]>([])
-  const driverId = computed(() =>
-    session.authenticated && session.user?.role === 'driver' ? session.user.id : undefined)
+  if (import.meta.env.DEV && !import.meta.env.PROD) {
+    watch(driverDemoEnabled, active => {
+      if (!active) requests.value = requests.value.filter(item => !isDemoDriver(item.driverId))
+    }, { flush: 'sync' })
+  }
+  const driverId = computed(() => reservations.driver?.id)
   const ownRequests = computed(() => Object.freeze(driverId.value
     ? requests.value.filter(item => item.driverId === driverId.value)
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))

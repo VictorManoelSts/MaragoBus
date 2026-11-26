@@ -8,6 +8,7 @@ import ReservationReceiptModal from '../components/ReservationReceiptModal.vue'
 import { useReservationReceipt } from '../composables/useReservationReceipt'
 import { studentNavigationItems } from '../router/student-navigation'
 import { useReservationsStore } from '../stores/reservations'
+import { formatCivilDate } from '../utils/format-transport-date'
 import { getTransportDate } from '../utils/reservation-availability'
 import { getReceiptAvailability } from '../utils/reservation-receipt'
 
@@ -19,10 +20,6 @@ const studentName = computed(() => session.user?.name.trim().split(/\s+/)[0])
 const quickLinks = studentNavigationItems.filter(item =>
   ['new-reservation', 'reservations', 'announcements'].includes(item.name))
 const statusLabels = { confirmed: 'Confirmada', cancelled: 'Cancelada' } as const
-function formatTravelDate(date: string) {
-  const [year, month, day] = date.split('-')
-  return `${day}/${month}/${year}`
-}
 </script>
 
 <template>
@@ -42,7 +39,7 @@ function formatTravelDate(date: string) {
           <div class="flex flex-wrap items-center gap-3">
             <CalendarDays :size="20" class="text-identity" aria-hidden="true" />
             <time :datetime="summary.currentReservation.travelDate" class="text-subtitle">
-              {{ formatTravelDate(summary.currentReservation.travelDate) }}
+              {{ formatCivilDate(summary.currentReservation.travelDate) }}
             </time>
             <BaseBadge :variant="summary.currentReservation.status === 'confirmed' ? 'neutral' : 'warning'">
               {{ statusLabels[summary.currentReservation.status] }}

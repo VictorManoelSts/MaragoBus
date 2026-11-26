@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatCivilDate } from '../utils/format-transport-date'
 import { BaseAlert, BaseBadge, BaseButton, BaseModal, BrandLogo } from '@maragobus/shared'
 import { useSessionStore } from '@maragobus/shared/auth/session'
 import type { StudentReservationSummary } from '../types/student-home'
@@ -6,7 +7,6 @@ import type { StudentReservationSummary } from '../types/student-home'
 defineProps<{ reservation?: StudentReservationSummary }>()
 const emit = defineEmits<{ close: [] }>()
 const session = useSessionStore()
-const dateFormat = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeZone: 'UTC' })
 </script>
 
 <template>
@@ -21,7 +21,7 @@ const dateFormat = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeZo
         </div>
         <div>
           <dt class="text-helper text-muted">Data da viagem</dt>
-          <dd><time :datetime="reservation.travelDate">{{ dateFormat.format(new Date(`${reservation.travelDate}T00:00:00Z`)) }}</time></dd>
+          <dd><time :datetime="reservation.travelDate">{{ formatCivilDate(reservation.travelDate) }}</time></dd>
         </div>
         <div>
           <dt class="text-helper text-muted">Faculdade</dt>

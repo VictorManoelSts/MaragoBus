@@ -40,7 +40,7 @@ A seção **Organização de rotas** usa a data selecionada no cabeçalho. A par
 
 ### Cenário demonstrativo
 
-Abra [o endereço de ativação da demonstração](http://localhost:5173/demo-motorista) diretamente no navegador. O Portal ativa o cenário e encaminha ao login. O cenário funciona no Portal local em desenvolvimento. A ativação e a sessão do motorista demonstrativo valem para a aba e persistem ao recarregar. Se já houver uma sessão, saia pelo perfil para trocar de conta.
+Abra [o endereço de ativação da demonstração](http://localhost:5173/demo-motorista) pelo navegador ou pela navegação interna do Portal. O cenário é ativado e o Portal encaminha ao login ou ao destino da sessão corrente. O cenário funciona no Portal local em desenvolvimento. A ativação e a sessão do motorista demonstrativo valem para a aba e persistem ao recarregar. Se já houver uma sessão, saia pelo perfil para trocar de conta.
 
 | Motorista | CPF fictício |
 | --- | --- |
@@ -48,9 +48,9 @@ Abra [o endereço de ativação da demonstração](http://localhost:5173/demo-mo
 | Motorista Demo 2 | `900.000.005-07` |
 | Motorista Demo 3 | `900.000.006-80` |
 
-A senha das três contas demonstrativas é `MotoristaDemo!24`. O Portal carrega em memória 30 reservas confirmadas para o dia civil de Maceió, distribuídas entre cinco faculdades e três pontos de embarque. Quinze alunos têm telefone fictício. Recarregar após a virada do dia gera o cenário para a nova data.
+A senha das três contas demonstrativas é `MotoristaDemo!24`. O Portal carrega em memória 30 reservas confirmadas para o dia civil de Maceió, distribuídas entre cinco faculdades e três pontos de embarque. Quinze alunos têm telefone fictício. As contas demonstrativas compartilham a organização de rotas entre si. As sessões comuns consultam apenas os registros do fluxo comum. Recarregar após a virada do dia gera o cenário para a nova data.
 
-Abra [o login com a demonstração desativada](http://localhost:5173/login?demo-motorista=0) na mesma aba para remover os dados e o acesso às três contas demonstrativas. Recarregar o Portal recria as stores em memória, inclusive solicitações de advertência e distribuições criadas durante a revisão.
+Abra [o login com a demonstração desativada](http://localhost:5173/login?demo-motorista=0) na mesma aba para encerrar a sessão demonstrativa e limpar suas reservas, distribuições e solicitações. A próxima ativação recria as reservas do dia em Maceió. A navegação interna preserva os registros das sessões comuns. Recarregar o Portal recria as stores em memória.
 
 ## Distribuição de faculdades
 

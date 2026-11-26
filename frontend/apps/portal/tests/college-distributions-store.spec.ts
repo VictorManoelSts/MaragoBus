@@ -39,35 +39,42 @@ describe('Store da distribuição de faculdades', () => {
 
   afterEach(() => vi.useRealTimers())
 
-  it('cria uma distribuição compartilhada por data e recusa duplicidade', () => {
+  it('cria um único rascunho na primeira atribuição e recusa atribuição duplicada', () => {
     const store = useCollegeDistributionsStore()
-    expect(store.create(travelDate)).toBe('created')
-    expect(store.create(travelDate)).toBe('already-exists')
+    const driver = { id: 'driver-a', name: 'Motorista A', role: 'driver' as const }
+    expect(store.getDistribution(travelDate)).toBeUndefined()
+    expect(store.transfer(travelDate, 'Faculdade A', driver)).toBe('not-found')
+    expect(store.assign(travelDate, 'Faculdade A', driver, true)).toBe('assigned')
+    expect(store.assign(travelDate, 'Faculdade A', driver, true)).toBe('already-assigned')
     expect(store.getDistribution(travelDate)).toMatchObject({
       travelDate, status: 'RASCUNHO', totalStudents: 3,
       colleges: [
-        { college: 'Faculdade A', studentCount: 2, driver: null },
+        { college: 'Faculdade A', studentCount: 2, driver: { id: driver.id, name: driver.name } },
         { college: 'Faculdade B', studentCount: 1, driver: null },
       ],
-      history: [{ type: 'created', author: { id: 'mock-driver-test' }, at: '2026-11-16T14:00:00.000Z' }],
+      history: [
+        { type: 'created', author: { id: 'mock-driver-test' }, at: '2026-11-16T14:00:00.000Z' },
+        { type: 'assigned', college: 'Faculdade A', driver: { id: driver.id, name: driver.name } },
+      ],
     })
   })
 
   it('permite alterações apenas a motoristas e entre 11h e meia-noite em Maceió', async () => {
     const store = useCollegeDistributionsStore()
     vi.setSystemTime(new Date('2026-11-16T13:59:59.999Z'))
-    expect(store.create(travelDate)).toBe('outside-window')
+    const driver = { id: 'driver-a', name: 'Motorista A', role: 'driver' as const }
+    expect(store.assign(travelDate, 'Faculdade A', driver, true)).toBe('outside-window')
     vi.setSystemTime(new Date('2026-11-16T14:00:00.000Z'))
-    expect(store.create(travelDate)).toBe('created')
+    expect(store.assign(travelDate, 'Faculdade A', driver, true)).toBe('assigned')
     await setMockSession('student')
-    expect(store.assign(travelDate, 'Faculdade A', { id: 'driver-a', name: 'A', role: 'driver' })).toBe('driver-required')
+    expect(store.assign(travelDate, 'Faculdade B', driver, true)).toBe('driver-required')
     await setMockSession('admin')
     expect(store.publish(travelDate)).toBe('driver-required')
     useSessionStore().user = null
     expect(store.reopen(travelDate)).toBe('driver-required')
     await setMockSession('driver')
     vi.setSystemTime(new Date('2026-11-17T02:59:59.999Z'))
-    expect(store.assign(travelDate, 'Faculdade A', { id: 'driver-a', name: 'Motorista A', role: 'driver' })).toBe('assigned')
+    expect(store.assign(travelDate, 'Faculdade B', driver, true)).toBe('assigned')
     vi.setSystemTime(new Date('2026-11-17T03:00:00.000Z'))
     expect(store.remove(travelDate, 'Faculdade A')).toBe('outside-window')
   })
@@ -76,9 +83,9 @@ describe('Store da distribuição de faculdades', () => {
     const store = useCollegeDistributionsStore()
     const driverA = { id: 'driver-a', name: 'Motorista A', role: 'driver' as const }
     const driverB = { id: 'driver-b', name: 'Motorista B', role: 'driver' as const }
-    store.create(travelDate)
-    expect(store.assign(travelDate, 'Faculdade ausente', driverA)).toBe('college-not-found')
-    expect(store.assign(travelDate, 'Faculdade A', driverA)).toBe('assigned')
+    expect(store.assign(travelDate, 'Faculdade ausente', driverA, true)).toBe('college-not-found')
+    expect(store.getDistribution(travelDate)).toBeUndefined()
+    expect(store.assign(travelDate, 'Faculdade A', driverA, true)).toBe('assigned')
     expect(store.assign(travelDate, 'Faculdade A', driverB)).toBe('already-assigned')
     expect(store.transfer(travelDate, 'Faculdade A', driverA)).toBe('same-driver')
     expect(store.transfer(travelDate, 'Faculdade A', driverB)).toBe('transferred')
@@ -90,9 +97,10 @@ describe('Store da distribuição de faculdades', () => {
   it('publica apenas com todas as faculdades atribuídas e permite reabrir no mesmo dia', () => {
     const store = useCollegeDistributionsStore()
     const driver = { id: 'driver-a', name: 'Motorista A', role: 'driver' as const }
-    store.create(travelDate)
     expect(store.publish(travelDate)).toBe('unassigned-colleges')
-    store.assign(travelDate, 'Faculdade A', driver)
+    expect(store.getDistribution(travelDate)).toBeUndefined()
+    store.assign(travelDate, 'Faculdade A', driver, true)
+    expect(store.publish(travelDate)).toBe('unassigned-colleges')
     store.assign(travelDate, 'Faculdade B', driver)
     expect(store.publish(travelDate)).toBe('published')
     expect(store.getDistribution(travelDate)?.status).toBe('PUBLICADA')
@@ -126,8 +134,7 @@ describe('Store da distribuição de faculdades', () => {
     const distributions = useCollegeDistributionsStore()
     const reservations = useReservationsStore()
     const driver = { id: 'driver-a', name: 'Motorista A', role: 'driver' as const }
-    distributions.create(travelDate)
-    distributions.assign(travelDate, 'Faculdade A', driver)
+    distributions.assign(travelDate, 'Faculdade A', driver, true)
     distributions.assign(travelDate, 'Faculdade B', driver)
     distributions.publish(travelDate)
     const distribution = computed(() => distributions.getDistribution(travelDate))
@@ -185,8 +192,7 @@ describe('Store da distribuição de faculdades', () => {
     const store = useCollegeDistributionsStore()
     const driverA = { id: 'driver-a', name: 'Motorista A', role: 'driver' as const }
     const driverB = { id: 'driver-b', name: 'Motorista B', role: 'driver' as const }
-    store.create(travelDate)
-    store.assign(travelDate, 'Faculdade A', driverA)
+    store.assign(travelDate, 'Faculdade A', driverA, true)
     vi.setSystemTime(new Date('2026-11-16T15:00:00.000Z'))
     store.transfer(travelDate, 'Faculdade A', driverB)
     const history = store.getDistribution(travelDate)?.history
@@ -197,13 +203,13 @@ describe('Store da distribuição de faculdades', () => {
 
   it('reconhece o mesmo estado da store por dois motoristas e protege datas anteriores', async () => {
     const store = useCollegeDistributionsStore()
-    store.create(travelDate)
+    store.assign(travelDate, 'Faculdade B', { id: 'driver-a', name: 'Motorista A', role: 'driver' as const }, true)
     await setMockSession('driver')
     useSessionStore().user = { id: 'outro-motorista', name: 'Outro motorista', role: 'driver' }
     expect(store.getDistribution(travelDate)?.travelDate).toBe(travelDate)
     expect(store.assign(travelDate, 'Faculdade A', { id: 'outro-motorista', name: 'Outro motorista', role: 'driver' })).toBe('assigned')
     expect(store.getDistribution(travelDate)?.history.map(change => change.author.id))
-      .toEqual(['mock-driver-test', 'outro-motorista'])
+      .toEqual(['mock-driver-test', 'mock-driver-test', 'outro-motorista'])
     vi.setSystemTime(new Date('2026-11-17T14:00:00.000Z'))
     expect(store.remove(travelDate, 'Faculdade A')).toBe('outside-window')
     expect(store.getDistribution(travelDate)?.colleges[0]?.driver?.id).toBe('outro-motorista')

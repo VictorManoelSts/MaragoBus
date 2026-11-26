@@ -12,10 +12,10 @@ const options = computed(() => profile.reservationContext.boardingPoints.map(poi
 })))
 const fields = computed(() => [
   { label: 'Nome', value: profile.student?.name },
-  { label: 'CPF', value: null },
-  { label: 'E-mail', value: null },
+  { label: 'CPF', value: profile.registration?.cpf },
+  { label: 'E-mail', value: profile.registration?.email },
   { label: 'Faculdade', value: profile.reservationContext.college },
-  { label: 'Curso', value: null },
+  { label: 'Curso', value: profile.registration?.course },
   { label: 'Ponto de embarque padrão', value: options.value.find(option =>
     option.value === profile.reservationContext.defaultBoardingPointId)?.label },
 ])

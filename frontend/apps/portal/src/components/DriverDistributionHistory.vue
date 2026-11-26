@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { ArrowLeftRight, ArrowRight, Check, ChevronDown, History, LockOpen, Minus, Plus } from '@lucide/vue'
 import { BaseCard } from '@maragobus/shared'
 import type { DistributionChange } from '../types/college-distribution'
-import { transportTimeZone } from '../utils/reservation-availability'
+import { formatTransportDateTime } from '../utils/format-transport-date'
 
 const props = defineProps<{ history: readonly DistributionChange[] }>()
 
@@ -15,9 +15,6 @@ const eventDetails = {
   published: { label: 'Publicação', icon: Check },
   reopened: { label: 'Reabertura', icon: LockOpen },
 }
-const dateFormat = new Intl.DateTimeFormat('pt-BR', {
-  dateStyle: 'short', timeStyle: 'short', timeZone: transportTimeZone,
-})
 const events = computed(() => props.history.map((change, index) => ({ change, index, timestamp: Date.parse(change.at) }))
   .sort((left, right) => right.timestamp - left.timestamp || right.index - left.index))
 
@@ -59,7 +56,7 @@ function describe(change: DistributionChange): string {
               <p class="text-body font-semibold text-heading">{{ eventDetails[change.type].label }}</p>
               <p class="flex flex-wrap gap-x-3 text-helper text-muted">
                 <span>{{ change.author.name }}</span>
-                <time :datetime="change.at">{{ dateFormat.format(timestamp) }}</time>
+                <time :datetime="change.at">{{ formatTransportDateTime(timestamp) }}</time>
               </p>
               <p class="mt-1 text-body">{{ describe(change) }}</p>
             </div>

@@ -87,7 +87,7 @@ async function submit(event: Event) {
 </script>
 
 <template>
-  <main class="login-page flex min-h-dvh min-w-0 flex-col bg-app px-4 py-8 text-content" aria-labelledby="login-title">
+  <main id="portal-content" tabindex="-1" class="login-page flex min-h-dvh min-w-0 flex-col bg-app px-4 py-8 text-content" aria-labelledby="login-title">
     <BaseCard class="m-auto w-full max-w-[440px]">
       <header class="mb-7 text-center">
         <div class="mb-7 grid grid-cols-2 items-center gap-6">

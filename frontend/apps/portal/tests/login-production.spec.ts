@@ -36,5 +36,17 @@ it('ignora o identificador de aluno simulado nos dados de exemplo em produção'
   vi.stubEnv('DEV', false)
   vi.stubEnv('PROD', true)
   expect(getMockReservationForm('mock-student-test').college).toBeNull()
+  expect(getMockReservationForm('mock-student-test').boardingPoints).toEqual([])
   expect(getDemonstrationNotices('mock-student-test')).toEqual([])
+})
+
+it('não registra a rota do cenário do aluno em produção', async () => {
+  vi.stubEnv('DEV', false)
+  vi.stubEnv('PROD', true)
+  vi.resetModules()
+  const { createPortalRouter } = await import('../src/router')
+  const router = createPortalRouter(createMemoryHistory(), createPinia())
+  expect(router.getRoutes().some(route => route.path === '/demo-aluno')).toBe(false)
+  await router.push('/demo-aluno?cenario=aberta')
+  expect(router.currentRoute.value.name).toBe('login')
 })

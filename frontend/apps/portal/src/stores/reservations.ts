@@ -1,6 +1,7 @@
-import { computed, ref } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { driverDemoEnabled } from '@maragobus/shared/auth/driver-demo'
+import { isDemoDriver } from '@maragobus/shared/auth/mock-drivers'
 import { useSessionStore } from '@maragobus/shared/auth/session'
 import type { ReservationAvailability, TransportClosure, TravelDate } from '../types/reservation-availability'
 import type { ReservationFormContext } from '../types/reservation-form'
@@ -9,7 +10,9 @@ import { getCancellationDeadline, getReservationAvailability } from '../utils/re
 import { getReceiptAvailability } from '../utils/reservation-receipt'
 import { getDriverDemoReservations } from '../mocks/driver-demo-reservations'
 
-type SimulatedReservation = Omit<StudentReservationSummary, 'status'> & {
+import { useStudentDemoStore } from './student-demo'
+
+export type SimulatedReservation = Omit<StudentReservationSummary, 'status'> & {
   studentId: string
   studentName?: string
   studentPhone?: string
@@ -26,14 +29,34 @@ interface ConfirmationRequest {
 
 export const useReservationsStore = defineStore('reservations', () => {
   const session = useSessionStore()
-  const reservations = ref<SimulatedReservation[]>(import.meta.env.DEV && !import.meta.env.PROD && driverDemoEnabled()
-    ? getDriverDemoReservations(new Date()) : [])
+  const reservations = ref<SimulatedReservation[]>([])
+  const studentDemo = useStudentDemoStore()
+  const studentDemoReservations = ref<SimulatedReservation[]>([])
+  watch(() => studentDemo.scenario, scenario => {
+    studentDemoReservations.value = scenario ? [...scenario.reservations] : []
+  }, { immediate: true, flush: 'sync' })
+  const studentRecords = computed(() => studentDemo.scenario ? studentDemoReservations.value : reservations.value)
+  const demoReservations = shallowRef<SimulatedReservation[]>([])
+  if (import.meta.env.DEV && !import.meta.env.PROD) {
+    watch(driverDemoEnabled, active => {
+      demoReservations.value = active ? getDriverDemoReservations(new Date()) : []
+    }, { immediate: true, flush: 'sync' })
+  }
+  const demoDriver = computed(() => import.meta.env.DEV && !import.meta.env.PROD &&
+    session.user?.role === 'driver' && isDemoDriver(session.user.id))
+  const driver = computed(() => {
+    const user = session.user
+    if (!session.authenticated || user?.role !== 'driver') return
+    if (import.meta.env.DEV && !import.meta.env.PROD && demoDriver.value && !driverDemoEnabled()) return
+    return user
+  })
+  const driverReservations = computed(() => demoDriver.value ? demoReservations.value : reservations.value)
   const confirming = ref(false)
   const studentId = computed(() =>
     session.authenticated && session.user?.role === 'student' ? session.user.id : undefined)
   const studentReservations = computed(() => {
     const owner = studentId.value
-    return owner ? reservations.value.filter(item => item.studentId === owner) : []
+    return owner ? studentRecords.value.filter(item => item.studentId === owner) : []
   })
   let fallbackId = 0
 
@@ -47,9 +70,9 @@ export const useReservationsStore = defineStore('reservations', () => {
   }
 
   function listDriverReservations(travelDate: TravelDate) {
-    if (!session.authenticated || session.user?.role !== 'driver') return []
+    if (!driver.value) return []
 
-    return reservations.value
+    return driverReservations.value
       .filter(item => item.travelDate === travelDate && item.status === 'confirmed')
       .map(({ id, studentName, studentPhone, college, boardingPointId, boardingPoint }) =>
         Object.freeze({ id, studentName, college, boardingPointId, boardingPoint, ...(studentPhone && { studentPhone }) }))
@@ -57,8 +80,8 @@ export const useReservationsStore = defineStore('reservations', () => {
 
   function countConfirmedByCollege(travelDate: TravelDate) {
     const counts = new Map<string, number>()
-    if (!session.authenticated || session.user?.role !== 'driver') return counts
-    for (const reservation of reservations.value) {
+    if (!driver.value) return counts
+    for (const reservation of driverReservations.value) {
       if (reservation.travelDate === travelDate && reservation.status === 'confirmed') {
         counts.set(reservation.college, (counts.get(reservation.college) ?? 0) + 1)
       }
@@ -67,9 +90,9 @@ export const useReservationsStore = defineStore('reservations', () => {
   }
 
   function findDriverReservationForWarning(id: string) {
-    if (!session.authenticated || session.user?.role !== 'driver') return
+    if (!driver.value) return
 
-    const reservation = reservations.value.find(item => item.id === id && item.status === 'confirmed')
+    const reservation = driverReservations.value.find(item => item.id === id && item.status === 'confirmed')
     if (!reservation) return
     const { studentId, studentName, travelDate } = reservation
     return { studentId, studentName, travelDate }
@@ -104,8 +127,8 @@ export const useReservationsStore = defineStore('reservations', () => {
   }
 
   function confirm(request: ConfirmationRequest) {
-    const now = new Date()
-    const result = validateConfirmation(request, getReservationAvailability(now, request.closures))
+    const now = studentDemo.now()
+    const result = validateConfirmation(request, getReservationAvailability(now, studentDemo.scenario?.closures ?? request.closures))
     if (result.status !== 'ready') return result
 
     confirming.value = true
@@ -121,7 +144,7 @@ export const useReservationsStore = defineStore('reservations', () => {
         confirmedAt: now.toISOString(),
         status: 'confirmed',
       }
-      reservations.value.push(reservation)
+      studentRecords.value.push(reservation)
       return { status: 'confirmed', reservation } as const
     } finally {
       confirming.value = false
@@ -138,20 +161,20 @@ export const useReservationsStore = defineStore('reservations', () => {
   }
 
   function cancel(reservationId: string) {
-    const now = new Date()
+    const now = studentDemo.now()
     const reservation = findOwnedReservation(reservationId)
     if (!reservation) return 'not-found'
     if (reservation.status !== 'confirmed') return 'already-cancelled'
     if (now >= getCancellationDeadline(reservation.travelDate)) return 'deadline-passed'
 
-    reservations.value[reservations.value.indexOf(reservation)] = {
+    studentRecords.value[studentRecords.value.indexOf(reservation)] = {
       ...reservation, status: 'cancelled', cancelledAt: now.toISOString(),
     }
     return 'cancelled'
   }
 
   return {
-    studentReservations, confirming, studentId, findReservation, findConfirmed, listDriverReservations,
+    studentReservations, confirming, studentId, driver, demoDriver, findReservation, findConfirmed, listDriverReservations,
     findDriverReservationForWarning, countConfirmedByCollege,
     getHomeSummary, getReceiptReservation, validateConfirmation, confirm, cancel,
   }

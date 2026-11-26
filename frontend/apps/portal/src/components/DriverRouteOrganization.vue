@@ -4,7 +4,7 @@ import { ArrowLeftRight, Building2, Bus } from '@lucide/vue'
 import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal, BaseSelect } from '@maragobus/shared'
 import { listMockDrivers } from '@maragobus/shared/auth/mock-drivers'
 import { useCollegeDistributionsStore } from '../stores/college-distributions'
-import { transportTimeZone } from '../utils/reservation-availability'
+import { formatTransportDateTime } from '../utils/format-transport-date'
 import DriverDistributionHistory from './DriverDistributionHistory.vue'
 
 const props = defineProps<{ date: string; reference: Date }>()
@@ -21,7 +21,7 @@ const countLabel = (count: number, singular: string, plural: string) => `${count
 const drivers = computed(() => {
   const current = organization.value.driver
   if (!current) return []
-  const mockDrivers = import.meta.env.DEV && !import.meta.env.PROD ? listMockDrivers() : []
+  const mockDrivers = import.meta.env.DEV && !import.meta.env.PROD ? listMockDrivers(current.id) : []
   return [...new Map([...mockDrivers, current].map(driver => [driver.id, driver])).values()]
 })
 const options = computed(() => drivers.value.map(driver => ({ value: driver.id, label: driver.name })))
@@ -53,9 +53,6 @@ const showPublish = computed(() => organization.value.driver && organization.val
 const publicationBlocked = computed(() => showPublish.value && !organization.value.canPublish
   ? message.value || 'Atribua todas as faculdades com reservas confirmadas para publicar a distribuição.'
   : '')
-const publicationDate = new Intl.DateTimeFormat('pt-BR', {
-  dateStyle: 'short', timeStyle: 'short', timeZone: transportTimeZone,
-})
 const heading = ref<HTMLElement>()
 const unassignedList = ref<HTMLUListElement>()
 const publicationActions = ref<HTMLElement>()
@@ -189,9 +186,9 @@ async function applyChange(action: 'assign' | 'transfer' | 'remove', college: st
 
       <BaseCard>
         <h3 class="text-body font-semibold text-heading">Faculdades não atribuídas</h3>
-        <ul v-if="unassigned.length" ref="unassignedList" aria-label="Faculdades não atribuídas" class="mt-2 divide-y divide-line">
+        <ul v-if="unassigned.length" ref="unassignedList" aria-label="Faculdades não atribuídas" class="mt-1 divide-y divide-line">
           <li v-for="college in unassigned" :key="college.college"
-            class="grid min-w-0 gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,16rem)] sm:items-center sm:gap-4">
+            class="grid min-w-0 gap-2 py-2.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,21rem)] sm:items-center sm:gap-3 sm:py-2">
             <div class="flex min-w-0 items-center gap-3">
               <Building2 :size="20" class="shrink-0 text-identity" aria-hidden="true" />
               <div class="min-w-0 wrap-anywhere">
@@ -199,11 +196,12 @@ async function applyChange(action: 'assign' | 'transfer' | 'remove', college: st
                 <p class="text-helper text-muted">{{ countLabel(college.studentCount, 'aluno', 'alunos') }}</p>
               </div>
             </div>
-            <div v-if="organization.canEdit" class="grid gap-2">
+            <div v-if="organization.canEdit" class="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
               <BaseSelect :model-value="pendingDrivers.get(college.college) ?? ''" :options="options"
                 label="Motorista" :aria-label="`Motorista para ${college.college}`" placeholder="Selecione o motorista"
                 @update:model-value="pendingDrivers.set(college.college, $event)" />
-              <BaseButton size="sm" class="justify-self-end" :disabled="!pendingDrivers.get(college.college)"
+              <BaseButton size="sm" class="justify-self-end sm:min-h-[var(--mb-control-md)]"
+                :disabled="!pendingDrivers.get(college.college)"
                 :aria-label="`Atribuir motorista a ${college.college}`"
                 @click="applyChange('assign', college.college, pendingDrivers.get(college.college))">
                 Atribuir
@@ -251,7 +249,7 @@ async function applyChange(action: 'assign' | 'transfer' | 'remove', college: st
       </div>
       <p v-if="organization.publication" class="text-helper text-muted">
         Publicada por {{ organization.publication.author.name }} em
-        <time :datetime="organization.publication.at">{{ publicationDate.format(new Date(organization.publication.at)) }}</time>
+        <time :datetime="organization.publication.at">{{ formatTransportDateTime(organization.publication.at) }}</time>
       </p>
       <BaseButton v-if="organization.canReopen" variant="outline" aria-haspopup="dialog"
         @click="openConfirmation('reopen', $event)">

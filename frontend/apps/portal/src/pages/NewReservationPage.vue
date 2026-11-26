@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { formatTransportDateTime } from '../utils/format-transport-date'
 import { computed, ref, watch } from 'vue'
 import { BaseAlert, BaseButton, BaseCard, BaseSelect } from '@maragobus/shared'
 import { useTransportClock } from '../composables/useTransportClock'
 import { mockTransportClosures } from '../mocks/transport-closures'
 import { useReservationsStore } from '../stores/reservations'
+import { useStudentDemoStore } from '../stores/student-demo'
 import { useStudentProfileStore } from '../stores/student-profile'
 import type { TransportClosure } from '../types/reservation-availability'
 import type { ReservationFormContext } from '../types/reservation-form'
@@ -20,7 +22,9 @@ const reservations = useReservationsStore()
 const profile = useStudentProfileStore()
 const context = computed(() => props.context ?? profile.reservationContext)
 const { reference, refresh } = useTransportClock()
-const availability = computed(() => getReservationAvailability(reference.value, props.closures))
+const demo = useStudentDemoStore()
+const closures = computed(() => demo.scenario?.closures ?? props.closures)
+const availability = computed(() => getReservationAvailability(reference.value, closures.value))
 const openWindow = computed(() => availability.value.status === 'open' ? availability.value.window : null)
 const nextWindow = computed(() => availability.value.status === 'open' ? null : availability.value.nextWindow)
 const closure = computed(() => availability.value.status === 'no-service' ? availability.value.closure : null)
@@ -49,7 +53,7 @@ const confirmationRequest = computed(() => ({
   travelDate: openWindow.value?.travelDate ?? null,
   context: context.value,
   boardingPointId: selectedPointId.value,
-  closures: props.closures,
+  closures: closures.value,
 }))
 const eligibility = computed(() => reservations.validateConfirmation(confirmationRequest.value, availability.value).status)
 const existingReservation = computed(() => {
@@ -80,9 +84,6 @@ function confirmReservation() {
 
 const civilDateFormat = new Intl.DateTimeFormat('pt-BR', {
   weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
-})
-const transportDateTimeFormat = new Intl.DateTimeFormat('pt-BR', {
-  dateStyle: 'short', timeStyle: 'short', timeZone: transportTimeZone,
 })
 const transportHourFormat = new Intl.DateTimeFormat('pt-BR', {
   timeStyle: 'short', timeZone: transportTimeZone,
@@ -120,7 +121,7 @@ const collegeLabel = computed(() => context.value.college?.trim() || 'Faculdade 
             <p v-if="closure.description">{{ closure.description }}</p>
             <p>Não é possível reservar para essa data.</p>
           </template>
-          <p>Próxima abertura conhecida em <time :datetime="nextWindow.opensAt.toISOString()">{{ transportDateTimeFormat.format(nextWindow.opensAt) }}</time> (horário de Alagoas).</p>
+          <p>Próxima abertura conhecida em <time :datetime="nextWindow.opensAt.toISOString()">{{ formatTransportDateTime(nextWindow.opensAt) }}</time> (horário de Alagoas).</p>
           <p>Viagem em <time :datetime="nextWindow.travelDate">{{ formatDate(nextWindow.travelDate) }}</time>.</p>
         </template>
       </BaseAlert>

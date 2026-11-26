@@ -8,7 +8,11 @@ export const demoDrivers = [
   { id: 'driver-demo-3', name: 'Motorista Demo 3', role: 'driver' },
 ] as const
 
-export function listMockDrivers(): SessionUser[] {
+export function isDemoDriver(id: string): boolean {
+  return demoDrivers.some(driver => driver.id === id)
+}
+
+export function listMockDrivers(driverId: string): SessionUser[] {
   if (!import.meta.env.DEV || import.meta.env.PROD || window.location.hostname !== 'localhost') return []
-  return (driverDemoEnabled() ? demoDrivers : [testDriver]).map(driver => ({ ...driver }))
+  return (driverDemoEnabled() && isDemoDriver(driverId) ? demoDrivers : [testDriver]).map(driver => ({ ...driver }))
 }
