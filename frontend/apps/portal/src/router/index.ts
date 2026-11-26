@@ -18,6 +18,7 @@ const studentPages: Partial<Record<string, () => Promise<{ default: Component }>
 const driverPages: Partial<Record<string, () => Promise<{ default: Component }>>> = {
   'driver-reservations': () => import('../pages/DriverReservationsPage.vue'),
   'driver-warning-requests': () => import('../pages/DriverWarningRequestsPage.vue'),
+  'driver-profile': () => import('../pages/DriverProfilePage.vue'),
 }
 
 const routes: RouteRecordRaw[] = [

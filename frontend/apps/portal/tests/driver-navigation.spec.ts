@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory } from 'vue-router'
-import { BaseCard } from '@maragobus/shared'
+import { BaseBadge, BaseCard } from '@maragobus/shared'
+import { applyDriverDemoPreference, clearDriverDemoSession, setDriverDemoSession } from '@maragobus/shared/auth/driver-demo'
+import { authNavigation } from '@maragobus/shared/auth/navigation'
+import { useSessionStore } from '@maragobus/shared/auth/session'
 import App from '../src/App.vue'
 import DriverLayout from '../src/layouts/DriverLayout.vue'
 import StudentNavigation from '../src/components/StudentNavigation.vue'
@@ -26,19 +29,68 @@ async function application(path: string) {
 }
 
 describe('Navegação do motorista', () => {
-  it.each(destinations.slice(2))('abre diretamente $path com sessão de motorista e conteúdo provisório', async ({ path, title }) => {
-    const { wrapper } = await application(path)
+  it('abre o perfil com a identidade da sessão e campos somente para leitura', async () => {
+    const { wrapper } = await application('/motorista/perfil')
     expect(wrapper.findComponent(DriverLayout).exists()).toBe(true)
     expect(wrapper.findComponent(StudentNavigation).exists()).toBe(false)
-    expect(wrapper.findAll('main')).toHaveLength(1)
-    expect(wrapper.findAll('h1')).toHaveLength(1)
-    expect(wrapper.get('main h1').text()).toBe(title)
-    expect(wrapper.get('main p').text().length).toBeGreaterThan(20)
-    expect(wrapper.findAllComponents(BaseCard)).toHaveLength(1)
-    expect(wrapper.findComponent(BaseCard).text()).toBe('Esta funcionalidade será implementada posteriormente.')
-    expect(wrapper.get('main').findAll('table, input, form, select, ul')).toHaveLength(0)
-    expect(wrapper.get('main').findAll('button').map(button => button.text())).toEqual(path === '/motorista/perfil' ? ['Sair'] : [])
-    expect(wrapper.get('header img').attributes('src')).toContain('logo-horizontal.svg')
+    expect(wrapper.get('main h1').text()).toBe('Perfil do motorista')
+    const card = wrapper.getComponent(BaseCard)
+    expect(card.get('h2').text()).toBe('Motorista de Teste')
+    expect(card.get('svg').attributes('aria-hidden')).toBe('true')
+    expect(card.getComponent(BaseBadge).text()).toBe('Motorista')
+    expect(card.get('h3').text()).toBe('Dados pessoais')
+    expect(card.get('dt').text()).toBe('Nome completo')
+    expect(card.get('dd').text()).toBe('Motorista de Teste')
+    expect(card.text()).toContain('Solicite alterações cadastrais à administração.')
+    expect(card.findAll('input, form, select, textarea, button')).toHaveLength(0)
+    expect(wrapper.get('main').findAll('button').map(button => button.text())).toEqual(['Sair'])
+  })
+
+  it('indica os dados indisponíveis na sessão', async () => {
+    const { wrapper } = await application('/motorista/perfil')
+    const rows = wrapper.get('main dl').findAll('div').slice(1)
+    expect(rows.map(row => [row.get('dt').text(), row.get('dd').text()])).toEqual([
+      ['CPF', 'Não informado'],
+      ['E-mail', 'Não informado'],
+      ['Telefone', 'Não informado'],
+    ])
+  })
+
+  it.each(['anonymous', 'student', 'admin'] as const)('protege o perfil da sessão %s', async role => {
+    const external = vi.spyOn(authNavigation, 'openExternal').mockImplementation(() => {})
+    try {
+      if (role !== 'anonymous') await setMockSession(role)
+      const router = createPortalRouter(createMemoryHistory())
+      await router.push('/motorista/perfil')
+      expect(router.currentRoute.value.path).toBe(role === 'anonymous' ? '/login' : '/')
+      expect(router.currentRoute.value.name).not.toBe('driver-profile')
+      if (role === 'admin') expect(external).toHaveBeenCalledWith('http://localhost:5174/')
+    } finally {
+      external.mockRestore()
+    }
+  })
+
+  it('substitui a identidade ao trocar de motorista e oculta o perfil ao trocar de papel', async () => {
+    const { wrapper } = await application('/motorista/perfil')
+    const session = useSessionStore()
+    expect(wrapper.get('main h2').text()).toBe('Motorista de Teste')
+
+    applyDriverDemoPreference('/demo-motorista')
+    setDriverDemoSession('driver-demo-2')
+    try {
+      await session.restore()
+      await flushPromises()
+      expect(wrapper.get('main h2').text()).toBe('Motorista Demo 2')
+      expect(wrapper.get('main dd').text()).toBe('Motorista Demo 2')
+      expect(wrapper.text()).not.toContain('Motorista de Teste')
+    } finally {
+      clearDriverDemoSession()
+    }
+
+    await setMockSession('student')
+    await flushPromises()
+    expect(wrapper.findComponent(DriverLayout).exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Motorista Demo 2')
   })
 
   describe.each(['desktop', 'mobile'] as const)('%s', variant => {
@@ -125,11 +177,9 @@ describe('Navegação do motorista', () => {
     expect(wrapper.get('main').findAll('form, textarea, button, ul')).toHaveLength(0)
   })
 
-  it('preserva título, descrição e card da página de perfil, ajustando apenas seu rótulo de navegação', async () => {
+  it('mantém Meu perfil como rótulo de navegação', async () => {
     const { wrapper } = await application('/motorista/perfil')
     expect(wrapper.get('main h1').text()).toBe('Perfil do motorista')
-    expect(wrapper.get('main p').text()).toBe('Espaço para consultar as informações do perfil do motorista.')
-    expect(wrapper.findComponent(BaseCard).text()).toBe('Esta funcionalidade será implementada posteriormente.')
     for (const nav of wrapper.findAllComponents(PortalNavigation)) {
       expect(nav.get('a[aria-current="page"]').text()).toBe('Meu perfil')
     }
