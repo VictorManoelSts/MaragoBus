@@ -7,7 +7,7 @@ import { useSessionStore } from '@maragobus/shared/auth/session'
 import { selectStudentDemo } from '@maragobus/shared/auth/student-demo'
 import { resolveStudentDemoSelection } from '../mocks/student-demo'
 import { applyDriverDemoPreference } from '@maragobus/shared/auth/driver-demo'
-import { studentNavigationItems, studentNotificationsLink, studentReservationLink } from './student-navigation'
+import { studentNavigationItems, studentNotificationsLink } from './student-navigation'
 import { driverNavigationItems } from './driver-navigation'
 
 declare module 'vue-router' {
@@ -16,12 +16,11 @@ declare module 'vue-router' {
   }
 }
 
-const studentLinks = [...studentNavigationItems, studentReservationLink, studentNotificationsLink] as const
+const studentLinks = [...studentNavigationItems, studentNotificationsLink] as const
 
 const studentPages = {
   home: () => import('../pages/HomePage.vue'),
   receipt: () => import('../pages/StudentReceiptPage.vue'),
-  'new-reservation': () => import('../pages/NewReservationPage.vue'),
   reservations: () => import('../pages/StudentReservationsPage.vue'),
   announcements: () => import('../pages/StudentNotificationsPage.vue'),
   profile: () => import('../pages/StudentProfilePage.vue'),
@@ -51,6 +50,7 @@ const routes: RouteRecordRaw[] = [
       component: studentPages[item.name],
     })),
   },
+  { path: '/reservar', name: 'new-reservation', redirect: { name: 'home' } },
   { path: '/historico', name: 'history', redirect: { name: 'reservations' } },
   { path: '/avisos', redirect: { name: 'announcements' } },
   {

@@ -85,7 +85,8 @@ describe.each(roles)('Permissões do perfil %s', role => {
       expect(external).toHaveBeenCalledExactlyOnceWith('http://localhost:5174/')
     } else {
       const allowed = role === 'student' ? students : drivers
-      expect(router.currentRoute.value.path).toBe(allowed.includes(path) ? path : allowed[0])
+      const destination = path === '/reservar' ? '/' : path
+      expect(router.currentRoute.value.path).toBe(allowed.includes(destination) ? destination : allowed[0])
       expect(router.currentRoute.value.meta.allowedRoles).toEqual([role])
       expect(external).not.toHaveBeenCalled()
     }

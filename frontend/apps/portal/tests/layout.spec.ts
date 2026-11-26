@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory } from 'vue-router'
 import { BaseCard, BrandLogo } from '@maragobus/shared'
@@ -142,14 +142,17 @@ describe('Largura do Portal nos dois perfis', () => {
 })
 
 describe('Página inicial do Portal', () => {
+  afterEach(() => vi.useRealTimers())
+
   it('integra a home do aluno ao layout e ao card compartilhado', async () => {
     await setMockSession('student')
+    vi.setSystemTime(new Date('2026-11-16T13:59:00Z'))
     const router = createPortalRouter(createMemoryHistory())
     const wrapper = mount(PortalLayout, { slots: { default: HomePage }, global: { plugins: [router] } })
     expect(wrapper.findComponent(PortalLayout).exists()).toBe(true)
     expect(wrapper.get('main h1').text()).toBe('Olá, Aluno!')
-    expect(wrapper.get('main').text()).toContain('Acompanhe suas reservas de transporte universitário.')
-    expect(wrapper.findComponent(BaseCard).text()).toContain('Você não tem uma reserva atual para apresentar.')
+    expect(wrapper.get('main').text()).toContain('Acompanhe e gerencie suas reservas de transporte.')
+    expect(wrapper.findComponent(BaseCard).text()).toContain('Reservas abertas')
     expect(wrapper.findAll('main')).toHaveLength(1)
     expect(wrapper.findAll('img')).toHaveLength(1)
   })

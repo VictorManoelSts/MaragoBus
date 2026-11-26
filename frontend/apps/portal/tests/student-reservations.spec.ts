@@ -44,7 +44,7 @@ describe('Minhas reservas', () => {
     expect(wrapper.get('main').text()).toContain('Você ainda não tem reservas.')
     expect(wrapper.find('main select').exists()).toBe(false)
     await wrapper.get('main a').trigger('click')
-    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/reservar'))
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/'))
   })
 
   it('prioriza hoje, ordena futuras e anteriores pela proximidade e conserva o status', async () => {
@@ -100,11 +100,11 @@ describe('Minhas reservas', () => {
     expect(wrapper.findAll('main time')).toHaveLength(1)
   })
 
-  it('mostra em Minhas reservas a confirmação feita na rota Fazer reserva', async () => {
+  it('mostra em Minhas reservas a confirmação feita na página inicial', async () => {
     vi.setSystemTime(new Date('2026-11-17T13:00:00Z'))
-    const { router, wrapper } = await page('/reservar')
+    const { router, wrapper } = await page('/')
     await wrapper.get('main select').setValue('demo-south')
-    await wrapper.get('main button').trigger('click')
+    await wrapper.get('main form').trigger('submit')
     await router.push({ name: 'reservations' })
     await flushPromises()
     expect(wrapper.get('main h2').text()).toBe('Hoje')

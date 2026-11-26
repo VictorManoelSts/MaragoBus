@@ -1,6 +1,6 @@
 # Reservas do aluno
 
-O Portal oferece um fluxo demonstrativo em memória nas rotas `/`, `/reservar` e `/reservas`. A [store Pinia](../apps/portal/src/stores/reservations.ts) é a fonte de verdade e consulta os registros pelo aluno autenticado. Recarregar a aplicação elimina as reservas. A simulação não envia dados à API.
+O Portal oferece um fluxo demonstrativo em memória nas rotas `/` e `/reservas`. O endereço anterior `/reservar` redireciona para `/`. A [store Pinia](../apps/portal/src/stores/reservations.ts) é a fonte de verdade e consulta os registros pelo aluno autenticado. Recarregar a aplicação elimina as reservas. A simulação não envia dados à API.
 
 ## Calendário e disponibilidade
 
@@ -16,7 +16,7 @@ A store impede duplicidade por aluno e data, inclusive cliques repetidos e tenta
 
 ## Página inicial e listagem
 
-A página inicial usa o primeiro nome da sessão quando disponível. A reserva de hoje permanece no card principal até a meia-noite, inclusive com status Cancelada quando aplicável. A primeira reserva futura confirmada aparece em aviso abaixo do card, sem substituir a de hoje. A ausência de reservas não gera registros fictícios. O estado vazio oferece acesso a Fazer reserva. Notificações permanece destinada aos avisos administrativos.
+A página inicial usa o primeiro nome da sessão quando disponível. A reserva de hoje permanece no card principal até a meia-noite, inclusive com status Cancelada quando aplicável. A primeira reserva futura confirmada aparece em um cartão com a data e o horário de liberação do comprovante. O formulário fica disponível na página inicial durante uma janela aberta para alunos aptos a reservar. Notificações permanece destinada aos avisos administrativos.
 
 Minhas reservas mostra as reservas de hoje primeiro, as futuras da mais próxima à mais distante e as anteriores da mais recente à mais antiga. Os filtros cobrem período e os estados Confirmada e Cancelada. Uma data anterior preserva seu status registrado.
 

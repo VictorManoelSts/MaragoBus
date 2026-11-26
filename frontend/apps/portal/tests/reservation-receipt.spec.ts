@@ -64,7 +64,7 @@ describe('Comprovante de reserva', () => {
       context: getMockReservationForm('mock-student-test'),
     }).status).toBe('confirmed')
     const wrapper = await page()
-    expect(wrapper.get('main section').element.lastElementChild?.textContent).toContain('a partir das 00h')
+    expect(wrapper.get('main section[aria-labelledby="next-reservation-title"]').text()).toContain('a partir das 00h')
     expect(wrapper.get('main time').attributes('datetime')).toBe(travelDate)
     await wrapper.get('main button').trigger('click')
     const dialog = openDialog()

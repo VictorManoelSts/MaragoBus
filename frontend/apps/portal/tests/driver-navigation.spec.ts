@@ -147,15 +147,16 @@ describe('Navegação do motorista', () => {
     for (const path of ['/', '/comprovante', '/reservar', '/reservas', '/notificacoes', '/perfil']) {
       await router.push(path)
       await flushPromises()
-      expect(router.currentRoute.value.path).toBe(path)
+      const destination = path === '/reservar' ? '/' : path
+      expect(router.currentRoute.value.path).toBe(destination)
       expect(wrapper.findComponent(DriverLayout).exists()).toBe(false)
       expect(wrapper.findAllComponents(StudentNavigation)).toHaveLength(2)
       for (const nav of wrapper.findAllComponents(StudentNavigation)) {
         expect(nav.findAll('a')).toHaveLength(4)
         expect(nav.attributes('aria-label')).toBe('Navegação do aluno')
         const active = nav.find('a[aria-current="page"]')
-        if (path === '/reservar' || path === '/notificacoes') expect(active.exists()).toBe(false)
-        else expect(active.attributes('href')).toBe(path)
+        if (destination === '/notificacoes') expect(active.exists()).toBe(false)
+        else expect(active.attributes('href')).toBe(destination)
       }
     }
   })

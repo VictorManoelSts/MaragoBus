@@ -105,9 +105,9 @@ As configurações Vite, os HTMLs de entrada e os arquivos TypeScript complement
 | Admin | Principal: visão geral, alunos, motoristas, faculdades, pontos de embarque, solicitações de advertência e perfil. Complementar: cursos, cursos ofertados e reservas. |
 
 No Portal do aluno, o sino no cabeçalho exibe a contagem de avisos não lidos e
-leva a `/notificacoes`. Os atalhos de reserva continuam levando a `/reservar`.
+leva a `/notificacoes`. O formulário de reserva fica na página inicial.
 
-No Portal, `/historico` redireciona para `/reservas`, `/avisos` para
+No Portal, `/reservar` redireciona para `/`, `/historico` redireciona para `/reservas`, `/avisos` para
 `/notificacoes`. O Portal também redireciona `/motorista`, `/motorista/faculdades`,
 `/motorista/passageiros` e `/motorista/resumo`
 para `/motorista/reservas`. Os guards avaliam o destino final. Os redirecionamentos

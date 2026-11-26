@@ -88,7 +88,7 @@ const groups = computed(() => {
     <BaseCard v-if="!store.studentReservations.length">
       <div class="space-y-5">
         <p class="text-body">Você ainda não tem reservas.</p>
-        <RouterLink :to="{ name: 'new-reservation' }" class="mb-button mb-button--primary mb-button--md w-full sm:w-auto">
+        <RouterLink :to="{ name: 'home' }" class="mb-button mb-button--primary mb-button--md w-full sm:w-auto">
           Fazer reserva
         </RouterLink>
       </div>
