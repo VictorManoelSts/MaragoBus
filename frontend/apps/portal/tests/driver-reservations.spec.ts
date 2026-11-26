@@ -66,7 +66,7 @@ describe('Consulta de reservas do motorista', () => {
     await setMockSession('driver')
     vi.setSystemTime(new Date('2026-11-17T02:59:59Z'))
     const wrapper = mount(DriverReservationsPage)
-    const groups = () => wrapper.findAll('details')
+    const groups = () => wrapper.get('section[aria-labelledby="driver-reservations-by-college"]').findAll('details')
     const indicators = () => wrapper.findAll('[role="status"] dd').map(value => value.text())
     const list = wrapper.get('section[aria-labelledby="driver-reservations-by-college"]')
     const date = wrapper.get('#driver-reservation-date')

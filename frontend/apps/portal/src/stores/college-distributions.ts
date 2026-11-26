@@ -56,6 +56,7 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
       driver,
       status: distribution?.status,
       colleges,
+      history: distribution?.history,
       canEdit: canManage && distribution?.status !== 'PUBLICADA',
       canPublish: canManage && distribution?.status === 'RASCUNHO' &&
         colleges.every(college => college.studentCount === 0 || college.driver),

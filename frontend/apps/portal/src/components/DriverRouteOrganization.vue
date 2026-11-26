@@ -5,6 +5,7 @@ import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal, BaseSelect } fro
 import { listMockDrivers } from '@maragobus/shared/auth/mock'
 import { useCollegeDistributionsStore } from '../stores/college-distributions'
 import { transportTimeZone } from '../utils/reservation-availability'
+import DriverDistributionHistory from './DriverDistributionHistory.vue'
 
 const props = defineProps<{ date: string; reference: Date }>()
 const store = useCollegeDistributionsStore()
@@ -237,6 +238,8 @@ async function applyChange(action: 'assign' | 'transfer' | 'remove', college: st
     <BaseAlert v-if="transitionMessage" :variant="transitionError ? 'danger' : 'success'">
       <p ref="transitionFeedback" tabindex="-1">{{ transitionMessage }}</p>
     </BaseAlert>
+    <DriverDistributionHistory v-if="organization.driver && organization.schedule !== 'no-date'"
+      :key="date" :history="organization.history ?? []" />
 
     <BaseModal :model-value="Boolean(confirmation)" :title="confirmationLabel"
       :focus-fallback="() => heading" @update:model-value="confirmation = undefined">

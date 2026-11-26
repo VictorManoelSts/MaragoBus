@@ -1,4 +1,5 @@
 import { DOMWrapper, mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyDriverDemoPreference } from '@maragobus/shared/auth/driver-demo'
 import { useSessionStore } from '@maragobus/shared/auth/session'
@@ -138,9 +139,9 @@ describe('Organização de rotas', () => {
     expect(body.find('dialog[open]').exists()).toBe(false)
     expect(organization.text()).toContain('Publicada')
     expect(document.activeElement?.textContent).toContain('publicada com sucesso')
-    expect(organization.get('time').attributes('datetime')).toBe(openTime.toISOString())
-    expect(organization.get('time').text()).toContain('11:00')
-    expect(organization.get('time').element.parentElement?.textContent).toContain('Publicada por Motorista Demo 1')
+    expect(organization.get('time:not(details time)').attributes('datetime')).toBe(openTime.toISOString())
+    expect(organization.get('time:not(details time)').text()).toContain('11:00')
+    expect(organization.get('time:not(details time)').element.parentElement?.textContent).toContain('Publicada por Motorista Demo 1')
     expect(organization.findAll('select')).toHaveLength(0)
     expect(button(organization, 'Transferir')).toBeUndefined()
     expect(totals()).toEqual(['5/5', '30/30'])
@@ -155,7 +156,7 @@ describe('Organização de rotas', () => {
     await button(dialog(), 'Reabrir distribuição')!.trigger('click')
     expect(organization.text()).toContain('Rascunho')
     expect(document.activeElement?.textContent).toContain('reaberta com sucesso')
-    expect(organization.find('time').exists()).toBe(false)
+    expect(organization.find('time:not(details time)').exists()).toBe(false)
     expect(button(organization, 'Transferir')).toBeDefined()
     expect(assignedNames()).toEqual(firstDriverRows)
     expect(totals()).toEqual(['5/5', '30/30'])
@@ -273,5 +274,141 @@ describe('Organização de rotas', () => {
     expect(organization.text()).toContain('Entre como motorista')
     expect(organization.find('select').exists()).toBe(false)
     expect(useCollegeDistributionsStore().getDistribution(date)).toBeUndefined()
+  })
+})
+
+describe('Histórico de alterações da distribuição', () => {
+  it('mantém indicadores, atribuições e histórico consistentes no fluxo completo pela página', async () => {
+    const reservation = await seedReservation()
+    vi.setSystemTime(openTime)
+    const { organization, rows, totals } = render()
+    const store = useCollegeDistributionsStore()
+    const reservations = useReservationsStore()
+    const historyTypes = () => store.getDistribution(date)?.history.map(change => change.type)
+
+    await organization.get('select').setValue('mock-driver-test')
+    expect(totals()).toEqual(['1/1', '1/1'])
+
+    const secondDriver = { id: 'other-driver', name: 'Outro Motorista', role: 'driver' as const }
+    useSessionStore().user = secondDriver
+    await nextTick()
+    await rows('Motorista de Teste').get('button').trigger('click')
+    await dialog().get('select').setValue(secondDriver.id)
+    await button(dialog(), 'Transferir')!.trigger('click')
+    expect(rows(secondDriver.name).text()).toContain(college)
+    expect(totals()).toEqual(['1/1', '1/1'])
+
+    await rows(secondDriver.name).get('button').trigger('click')
+    await button(dialog(), 'Remover atribuição')!.trigger('click')
+    expect(totals()).toEqual(['0/1', '0/1'])
+    expect(button(organization, 'Publicar distribuição')?.element.disabled).toBe(true)
+
+    await organization.get('select').setValue(secondDriver.id)
+    await button(organization, 'Publicar distribuição')!.trigger('click')
+    await button(dialog(), 'Publicar distribuição')!.trigger('click')
+    expect(store.getDistribution(date)?.status).toBe('PUBLICADA')
+    expect(totals()).toEqual(['1/1', '1/1'])
+
+    await button(organization, 'Reabrir distribuição')!.trigger('click')
+    await button(dialog(), 'Reabrir distribuição')!.trigger('click')
+    expect(store.getDistribution(date)?.status).toBe('RASCUNHO')
+    expect(rows(secondDriver.name).text()).toContain(college)
+    expect(totals()).toEqual(['1/1', '1/1'])
+    const operations = ['created', 'assigned', 'transferred', 'removed', 'assigned', 'published', 'reopened']
+    expect(historyTypes()).toEqual(operations)
+
+    await setMockSession('student')
+    expect(reservations.cancel(reservation.id)).toBe('cancelled')
+    await setMockSession('driver')
+    expect(totals()).toEqual(['1/1', '0/0'])
+    expect(rows(secondDriver.name).text()).toContain('0 alunos')
+    expect(historyTypes()).toEqual(operations)
+    expect(organization.get('details summary').text()).toContain('7 alterações')
+  })
+
+  it('começa recolhido, mostra o estado vazio e isola a consulta por data e sessão', async () => {
+    vi.setSystemTime(openTime)
+    await setMockSession('driver')
+    const store = useCollegeDistributionsStore()
+    const { organization, dateInput } = render()
+    const historyCard = () => organization.get('details')
+
+    expect(historyCard().element.open).toBe(false)
+    expect(historyCard().get('summary').text()).toContain('Histórico de alterações')
+    expect(historyCard().get('summary').text()).toContain('0 alterações')
+    expect(historyCard().text()).toContain('Nenhuma alteração registrada para esta data.')
+    expect(historyCard().find('ol').exists()).toBe(false)
+
+    await historyCard().get('summary').trigger('click')
+    expect(historyCard().element.open).toBe(true)
+    expect(store.create(date)).toBe('created')
+    await nextTick()
+    expect(historyCard().element.open).toBe(true)
+    expect(historyCard().get('summary').text()).toContain('1 alteração')
+    expect(historyCard().get('ol li').text()).toContain('Criação')
+
+    await dateInput.setValue('2026-11-17')
+    expect(historyCard().element.open).toBe(false)
+    expect(historyCard().text()).toContain('Nenhuma alteração registrada para esta data.')
+    await dateInput.setValue(date)
+    expect(historyCard().element.open).toBe(false)
+    expect(historyCard().get('ol li').text()).toContain('Criação')
+
+    await dateInput.setValue('')
+    expect(organization.find('details').exists()).toBe(false)
+    await dateInput.setValue(date)
+    await setMockSession('student')
+    expect(organization.find('details').exists()).toBe(false)
+  })
+
+  it('consulta os seis eventos com autores, horários de Maceió e motoristas envolvidos', async () => {
+    await seedReservation()
+    vi.setSystemTime(openTime)
+    const store = useCollegeDistributionsStore()
+    const session = useSessionStore()
+    const { organization } = render()
+    const entries = () => organization.get('details ol').findAll('li')
+    organization.get('details').element.open = true
+    await organization.get('select').setValue('mock-driver-test')
+
+    const secondDriver = { id: 'other-driver', name: 'Outro Motorista', role: 'driver' as const }
+    const thirdDriver = { id: 'route-driver', name: 'Motorista da Rota', role: 'driver' as const }
+    session.user = secondDriver
+    const transferTime = new Date('2026-11-16T14:15:00Z')
+    vi.setSystemTime(transferTime)
+    expect(store.transfer(date, college, thirdDriver)).toBe('transferred')
+    const publicationTime = new Date('2026-11-16T14:30:00Z')
+    vi.setSystemTime(publicationTime)
+    expect(store.publish(date)).toBe('published')
+    expect(store.reopen(date)).toBe('reopened')
+    const removalTime = new Date('2026-11-16T14:20:00Z')
+    vi.setSystemTime(removalTime)
+    expect(store.remove(date, college)).toBe('removed')
+    await nextTick()
+
+    expect(organization.get('details summary').text()).toContain('6 alterações')
+    const expected = [
+      { label: 'Reabertura', at: publicationTime, local: '11:30', names: [secondDriver.name] },
+      { label: 'Publicação', at: publicationTime, local: '11:30', names: [secondDriver.name] },
+      { label: 'Remoção', at: removalTime, local: '11:20', names: [secondDriver.name, college, thirdDriver.name] },
+      { label: 'Transferência', at: transferTime, local: '11:15', names: [secondDriver.name, college, 'Motorista de Teste', thirdDriver.name] },
+      { label: 'Atribuição', at: openTime, local: '11:00', names: [college, 'Motorista de Teste'] },
+      { label: 'Criação', at: openTime, local: '11:00', names: ['Motorista de Teste'] },
+    ]
+    expected.forEach(({ label, at, local, names }, index) => {
+      const row = entries()[index]!
+      expect(row.text()).toContain(label)
+      for (const name of names) expect(row.text()).toContain(name)
+      expect(row.get('time').attributes('datetime')).toBe(at.toISOString())
+      expect(row.get('time').text()).toContain('16/11/2026')
+      expect(row.get('time').text()).toContain(local)
+    })
+
+    vi.setSystemTime(new Date('2026-11-17T03:00:00Z'))
+    document.dispatchEvent(new Event('visibilitychange'))
+    await nextTick()
+    expect(organization.text()).toContain('A data selecionada já passou')
+    expect(organization.get('details summary').text()).toContain('6 alterações')
+    expect(entries()[0]?.text()).toContain('Reabertura')
   })
 })
