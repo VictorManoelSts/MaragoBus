@@ -28,6 +28,37 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
   const reservations = useReservationsStore()
   const records = shallowReactive(new Map<TravelDate, DistributionRecord>())
 
+  function getSchedule(travelDate: TravelDate, now: Date) {
+    if (!/^\d{4,}-\d{2}-\d{2}$/.test(travelDate)) return 'no-date'
+    const today = getTransportDate(now)
+    if (travelDate < today) return 'past'
+    if (travelDate > today) return 'future'
+    return now < getReservationClosingTime(travelDate) ? 'before-closing' : 'open'
+  }
+
+  function currentDriver() {
+    const user = session.user
+    return session.authenticated && user?.role === 'driver' ? user : undefined
+  }
+
+  function getOrganization(travelDate: TravelDate, now: Date) {
+    const schedule = getSchedule(travelDate, now)
+    const driver = currentDriver()
+    const distribution = driver ? getDistribution(travelDate) : undefined
+    const colleges = distribution?.colleges ?? (driver
+      ? Array.from(reservations.countConfirmedByCollege(travelDate), ([college, studentCount]) => ({
+        college, studentCount, driver: null,
+      }))
+      : [])
+    return {
+      schedule,
+      driver,
+      status: distribution?.status,
+      colleges,
+      canEdit: Boolean(driver && schedule === 'open' && distribution?.status !== 'PUBLICADA'),
+    }
+  }
+
   function getDistribution(travelDate: TravelDate): CollegeDistribution | undefined {
     const record = records.get(travelDate)
     if (!record) return
@@ -48,12 +79,10 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
   }
 
   function authorize(travelDate: TravelDate) {
-    const user = session.user
-    if (!session.authenticated || user?.role !== 'driver') return 'driver-required'
+    const user = currentDriver()
+    if (!user) return 'driver-required'
     const now = new Date()
-    if (getTransportDate(now) !== travelDate || now < getReservationClosingTime(travelDate)) {
-      return 'outside-window'
-    }
+    if (getSchedule(travelDate, now) !== 'open') return 'outside-window'
     return { author: driverIdentity(user), at: now.toISOString() }
   }
 
@@ -74,10 +103,15 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
     return 'created'
   }
 
-  function editCollege(travelDate: TravelDate, edit: CollegeEdit) {
+  function editCollege(travelDate: TravelDate, edit: CollegeEdit, createDraft = false) {
     const audit = authorize(travelDate)
     if (typeof audit === 'string') return audit
-    const record = records.get(travelDate)
+    const existing = records.get(travelDate)
+    const record = existing ?? (createDraft ? {
+      status: 'RASCUNHO' as const,
+      assignments: new Map<string, DistributionDriver>(),
+      history: [Object.freeze({ ...audit, type: 'created' as const })],
+    } : undefined)
     if (!record) return 'not-found'
     if (record.status !== 'RASCUNHO') return 'not-draft'
 
@@ -108,8 +142,8 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
     return type
   }
 
-  function assign(travelDate: TravelDate, college: string, driver: SessionUser) {
-    return editCollege(travelDate, { type: 'assigned', college, driver })
+  function assign(travelDate: TravelDate, college: string, driver: SessionUser, createDraft = false) {
+    return editCollege(travelDate, { type: 'assigned', college, driver }, createDraft)
   }
 
   function remove(travelDate: TravelDate, college: string) {
@@ -143,5 +177,5 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
     return 'reopened'
   }
 
-  return { getDistribution, create, assign, remove, transfer, publish, reopen }
+  return { getDistribution, getOrganization, create, assign, remove, transfer, publish, reopen }
 })

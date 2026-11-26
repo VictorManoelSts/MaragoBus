@@ -36,7 +36,7 @@ Em `/motorista/reservas`, o motorista seleciona a data da viagem. A página apre
 
 O modal do aluno mostra nome, faculdade, telefone e ponto de embarque. Quando o telefone está ausente, a tela exibe **Não informado**. A ação **Solicitar advertência** abre o formulário existente, com motivo obrigatório e bloqueio de solicitações duplicadas. Ao voltar do formulário, o foco retorna à ação no modal do aluno. Ao fechar o modal do aluno, o foco retorna ao botão da lista. Após o envio, o foco vai para a confirmação, que dá acesso à página Advertências.
 
-A seção **Organização de rotas** exibe um aviso até as 11h da data selecionada em `America/Maceio`, quando as reservas encerram. Após o encerramento, a seção informa que a organização será disponibilizada em uma próxima etapa. Datas anteriores e a ausência de data têm mensagens próprias. A interface de atribuição, publicação e reabertura será entregue nas próximas etapas.
+A seção **Organização de rotas** usa a data selecionada no cabeçalho. A partir das 11h do dia da viagem em `America/Maceio`, o motorista pode atribuir uma faculdade pelo seletor de motorista. A primeira atribuição cria o rascunho. Nos cards dos motoristas, **Editar atribuição** permite transferir ou remover a faculdade. Os indicadores e os totais por motorista acompanham as atribuições e os cancelamentos. Distribuições publicadas e registros de datas anteriores ficam disponíveis para consulta.
 
 ### Cenário demonstrativo
 

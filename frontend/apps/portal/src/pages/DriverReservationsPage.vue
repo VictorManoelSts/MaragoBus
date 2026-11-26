@@ -3,10 +3,11 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Building2, ChevronDown, ChevronRight, UserRound } from '@lucide/vue'
 import { BaseAlert, BaseButton, BaseCard, BaseInput, BaseModal } from '@maragobus/shared'
+import DriverRouteOrganization from '../components/DriverRouteOrganization.vue'
 import { useTransportClock } from '../composables/useTransportClock'
 import { useReservationsStore } from '../stores/reservations'
 import { useWarningRequestsStore } from '../stores/warning-requests'
-import { getReservationClosingTime, getTransportDate } from '../utils/reservation-availability'
+import { getTransportDate } from '../utils/reservation-availability'
 
 const store = useReservationsStore()
 const warningRequests = useWarningRequestsStore()
@@ -33,18 +34,6 @@ const colleges = computed(() => {
     }))
 })
 
-const routeOrganizationMessage = computed(() => {
-  if (!/^\d{4,}-\d{2}-\d{2}$/.test(date.value)) {
-    return 'Selecione a data da viagem para consultar a organização de rotas.'
-  }
-  if (date.value < getTransportDate(reference.value)) {
-    return 'A data selecionada já passou e as reservas estão encerradas.'
-  }
-  if (reference.value < getReservationClosingTime(date.value)) {
-    return 'A organização de rotas estará disponível após o encerramento das reservas, às 11h na data selecionada.'
-  }
-  return 'As reservas desta data foram encerradas. A atribuição e a publicação de rotas estarão disponíveis em uma próxima etapa.'
-})
 const warningReason = ref('')
 const reasonError = ref(false)
 const warningError = ref('')
@@ -186,12 +175,7 @@ watch(() => warningRequests.driverId, () => {
       </BaseCard>
     </section>
 
-    <section aria-labelledby="driver-route-organization" class="space-y-3">
-      <h2 id="driver-route-organization" class="text-subtitle text-heading">Organização de rotas</h2>
-      <BaseCard>
-        <p role="status" class="text-body text-muted">{{ routeOrganizationMessage }}</p>
-      </BaseCard>
-    </section>
+    <DriverRouteOrganization :date="date" :reference="reference" />
 
     <BaseModal :model-value="Boolean(student)" title="Dados do aluno"
       :focus-fallback="() => pageHeading" @update:model-value="closeStudent">

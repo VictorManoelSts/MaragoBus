@@ -22,6 +22,12 @@ function enabled() {
 function publicUser(user: SessionUser): SessionUser {
   return { id: user.id, name: user.name, role: user.role }
 }
+
+export function listMockDrivers(): SessionUser[] {
+  if (!enabled()) return []
+  const drivers = driverDemoEnabled() ? demoDrivers : users.filter(user => user.role === 'driver')
+  return drivers.map(publicUser)
+}
 function clearCookie() {
   document.cookie = `${cookieName}=; Path=/; SameSite=Lax; Max-Age=0`
 }
