@@ -2,7 +2,7 @@ import type { ReservationFormContext } from '../types/reservation-form'
 
 export function getMockReservationForm(studentId?: string): ReservationFormContext {
   return {
-    college: studentId === 'mock-student-test' ? 'Faculdade de Demonstração' : null,
+    college: import.meta.env.DEV && !import.meta.env.PROD && studentId === 'mock-student-test' ? 'Faculdade de Demonstração' : null,
     defaultBoardingPointId: null,
     boardingPoints: [
       { id: 'demo-center', name: 'Praça de exemplo — Centro' },

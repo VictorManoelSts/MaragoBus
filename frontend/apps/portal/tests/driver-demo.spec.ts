@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyDriverDemoPreference } from '@maragobus/shared/auth/driver-demo'
 import { mockAuthService } from '@maragobus/shared/auth/mock'
+import { listMockDrivers } from '@maragobus/shared/auth/mock-drivers'
 import { authService } from '@maragobus/shared/auth/service'
 import { setMockSession } from '../../../packages/shared/tests/auth-fixture'
 import DriverReservationsPage from '../src/pages/DriverReservationsPage.vue'
@@ -34,6 +35,8 @@ describe('Cenário demonstrativo do motorista', () => {
 
     setPreference('?demo-motorista=1')
     setActivePinia(createPinia())
+    expect(useReservationsStore().countConfirmedByCollege(date).size).toBe(0)
+    await setMockSession('driver')
     expect(useReservationsStore().countConfirmedByCollege(date).size).toBe(5)
     await mockAuthService.login(credentials('90000000418'))
     setPreference('?demo-motorista=0')
@@ -73,10 +76,13 @@ describe('Cenário demonstrativo do motorista', () => {
   it('autentica e restaura três motoristas distintos mantendo o opt-in na mesma aba', async () => {
     setPreference('?demo-motorista=1')
     setPreference()
+    const catalog = listMockDrivers()
+    expect(catalog).toHaveLength(3)
     for (const [index, cpf] of ['90000000418', '90000000507', '90000000680'].entries()) {
       expect(cpfError(cpf)).toBe('')
       const driver = await mockAuthService.login(credentials(cpf))
       expect(driver).toMatchObject({ id: `driver-demo-${index + 1}`, role: 'driver' })
+      expect(catalog[index]).toEqual(driver)
       expect(await mockAuthService.restore()).toEqual(driver)
       mockAuthService.logout()
     }
@@ -85,6 +91,7 @@ describe('Cenário demonstrativo do motorista', () => {
   it('ignora a preferência em produção', async () => {
     setPreference('?demo-motorista=1')
     vi.stubEnv('PROD', true)
+    expect(listMockDrivers()).toEqual([])
     await expect(mockAuthService.login(credentials('90000000418'))).rejects.toThrow()
     expect(useReservationsStore().countConfirmedByCollege(date).size).toBe(0)
   })

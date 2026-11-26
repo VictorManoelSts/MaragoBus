@@ -44,7 +44,7 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
   function getOrganization(travelDate: TravelDate, now: Date) {
     const schedule = getSchedule(travelDate, now)
     const driver = currentDriver()
-    const distribution = driver ? getDistribution(travelDate) : undefined
+    const distribution = getDistribution(travelDate)
     const colleges = distribution?.colleges ?? (driver
       ? Array.from(reservations.countConfirmedByCollege(travelDate), ([college, studentCount]) => ({
         college, studentCount, driver: null,
@@ -58,8 +58,7 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
       colleges,
       history: distribution?.history,
       canEdit: canManage && distribution?.status !== 'PUBLICADA',
-      canPublish: canManage && distribution?.status === 'RASCUNHO' &&
-        colleges.every(college => college.studentCount === 0 || college.driver),
+      canPublish: canManage && distribution?.status !== 'PUBLICADA' && !hasUnassignedColleges(travelDate),
       canReopen: canManage && distribution?.status === 'PUBLICADA',
       publication: distribution?.status === 'PUBLICADA'
         ? distribution.history.filter(change => change.type === 'published').at(-1)
@@ -68,6 +67,7 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
   }
 
   function getDistribution(travelDate: TravelDate): CollegeDistribution | undefined {
+    if (!currentDriver()) return
     const record = records.get(travelDate)
     if (!record) return
 
@@ -94,6 +94,20 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
     return { author: driverIdentity(user), at: now.toISOString() }
   }
 
+  function hasUnassignedColleges(travelDate: TravelDate) {
+    const assignments = records.get(travelDate)?.assignments
+    return Array.from(reservations.countConfirmedByCollege(travelDate).keys())
+      .some(college => !assignments?.has(college))
+  }
+
+  function newDraft(audit: Pick<DistributionChange, 'author' | 'at'>): DistributionRecord {
+    return {
+      status: 'RASCUNHO',
+      assignments: new Map(),
+      history: Object.freeze([Object.freeze({ ...audit, type: 'created' as const })]),
+    }
+  }
+
   function save(travelDate: TravelDate, record: DistributionRecord, change: DistributionChange) {
     records.set(travelDate, {
       ...record,
@@ -105,9 +119,7 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
     const audit = authorize(travelDate)
     if (typeof audit === 'string') return audit
     if (records.has(travelDate)) return 'already-exists'
-    save(travelDate, { status: 'RASCUNHO', assignments: new Map(), history: [] }, {
-      ...audit, type: 'created',
-    })
+    records.set(travelDate, newDraft(audit))
     return 'created'
   }
 
@@ -115,11 +127,7 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
     const audit = authorize(travelDate)
     if (typeof audit === 'string') return audit
     const existing = records.get(travelDate)
-    const record = existing ?? (createDraft ? {
-      status: 'RASCUNHO' as const,
-      assignments: new Map<string, DistributionDriver>(),
-      history: [Object.freeze({ ...audit, type: 'created' as const })],
-    } : undefined)
+    const record = existing ?? (createDraft ? newDraft(audit) : undefined)
     if (!record) return 'not-found'
     if (record.status !== 'RASCUNHO') return 'not-draft'
 
@@ -166,12 +174,9 @@ export const useCollegeDistributionsStore = defineStore('college-distributions',
     const audit = authorize(travelDate)
     if (typeof audit === 'string') return audit
     const record = records.get(travelDate)
-    if (!record) return 'not-found'
-    if (record.status !== 'RASCUNHO') return 'not-draft'
-    for (const college of reservations.countConfirmedByCollege(travelDate).keys()) {
-      if (!record.assignments.has(college)) return 'unassigned-colleges'
-    }
-    save(travelDate, { ...record, status: 'PUBLICADA' }, { ...audit, type: 'published' })
+    if (record?.status === 'PUBLICADA') return 'not-draft'
+    if (hasUnassignedColleges(travelDate)) return 'unassigned-colleges'
+    save(travelDate, { ...(record ?? newDraft(audit)), status: 'PUBLICADA' }, { ...audit, type: 'published' })
     return 'published'
   }
 

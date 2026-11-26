@@ -2,7 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { ArrowLeftRight, Building2, Bus } from '@lucide/vue'
 import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal, BaseSelect } from '@maragobus/shared'
-import { listMockDrivers } from '@maragobus/shared/auth/mock'
+import { listMockDrivers } from '@maragobus/shared/auth/mock-drivers'
 import { useCollegeDistributionsStore } from '../stores/college-distributions'
 import { transportTimeZone } from '../utils/reservation-availability'
 import DriverDistributionHistory from './DriverDistributionHistory.vue'
@@ -21,7 +21,8 @@ const countLabel = (count: number, singular: string, plural: string) => `${count
 const drivers = computed(() => {
   const current = organization.value.driver
   if (!current) return []
-  return [...new Map([...listMockDrivers(), current].map(driver => [driver.id, driver])).values()]
+  const mockDrivers = import.meta.env.DEV && !import.meta.env.PROD ? listMockDrivers() : []
+  return [...new Map([...mockDrivers, current].map(driver => [driver.id, driver])).values()]
 })
 const options = computed(() => drivers.value.map(driver => ({ value: driver.id, label: driver.name })))
 const routes = computed(() => {
@@ -47,10 +48,18 @@ const message = computed(() => {
   return ''
 })
 const showDistribution = computed(() => Boolean(organization.value.status) || organization.value.canEdit)
+const showPublish = computed(() => organization.value.driver && organization.value.schedule !== 'no-date' &&
+  organization.value.status !== 'PUBLICADA')
+const publicationBlocked = computed(() => showPublish.value && !organization.value.canPublish
+  ? message.value || 'Atribua todas as faculdades com reservas confirmadas para publicar a distribuição.'
+  : '')
 const publicationDate = new Intl.DateTimeFormat('pt-BR', {
   dateStyle: 'short', timeStyle: 'short', timeZone: transportTimeZone,
 })
 const heading = ref<HTMLElement>()
+const unassignedList = ref<HTMLUListElement>()
+const publicationActions = ref<HTMLElement>()
+const pendingDrivers = ref(new Map<string, string | number>())
 const transitionFeedback = ref<HTMLElement>()
 const transitionMessage = ref('')
 const transitionError = ref(false)
@@ -72,6 +81,7 @@ function closeEditor() {
 
 watch([() => props.date, () => organization.value.driver?.id], () => {
   closeEditor()
+  pendingDrivers.value.clear()
   confirmation.value = undefined
   transitionMessage.value = ''
   feedback.value = ''
@@ -79,6 +89,9 @@ watch([() => props.date, () => organization.value.driver?.id], () => {
 })
 watch(() => organization.value.schedule, schedule => {
   if (schedule !== 'open') confirmation.value = undefined
+})
+watch(() => organization.value.canEdit, canEdit => {
+  if (!canEdit) pendingDrivers.value.clear()
 })
 watch(target, value => {
   if (!value) closeEditor()
@@ -117,6 +130,7 @@ async function confirmTransition() {
 
 async function applyChange(action: 'assign' | 'transfer' | 'remove', college: string, driverId?: string | number) {
   transitionMessage.value = ''
+  const assignmentIndex = action === 'assign' ? unassigned.value.findIndex(item => item.college === college) : -1
   const driver = drivers.value.find(item => item.id === driverId)
   const result = action === 'remove'
     ? store.remove(props.date, college)
@@ -132,8 +146,14 @@ async function applyChange(action: 'assign' | 'transfer' | 'remove', college: st
   }
   feedback.value = driver ? `${college} atribuída a ${driver.name}.` : `Atribuição de ${college} removida.`
   closeEditor()
+  pendingDrivers.value.delete(college)
   await nextTick()
-  heading.value?.focus()
+  const remainingSelectors = unassignedList.value?.querySelectorAll('select')
+  const nextControl = assignmentIndex >= 0 && remainingSelectors?.length
+    ? remainingSelectors[Math.min(assignmentIndex, remainingSelectors.length - 1)]
+    : action === 'assign' ? publicationActions.value?.querySelector<HTMLButtonElement>('button:not(:disabled)') : undefined
+  const focusTarget = nextControl ?? heading.value
+  focusTarget?.focus()
 }
 </script>
 
@@ -145,7 +165,7 @@ async function applyChange(action: 'assign' | 'transfer' | 'remove', college: st
         {{ organization.status === 'PUBLICADA' ? 'Publicada' : 'Rascunho' }}
       </BaseBadge>
     </div>
-    <BaseCard v-if="message">
+    <BaseCard v-if="message && !publicationBlocked">
       <p role="status" class="text-body text-muted">{{ message }}</p>
     </BaseCard>
 
@@ -169,7 +189,7 @@ async function applyChange(action: 'assign' | 'transfer' | 'remove', college: st
 
       <BaseCard>
         <h3 class="text-body font-semibold text-heading">Faculdades não atribuídas</h3>
-        <ul v-if="unassigned.length" aria-label="Faculdades não atribuídas" class="mt-2 divide-y divide-line">
+        <ul v-if="unassigned.length" ref="unassignedList" aria-label="Faculdades não atribuídas" class="mt-2 divide-y divide-line">
           <li v-for="college in unassigned" :key="college.college"
             class="grid min-w-0 gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,16rem)] sm:items-center sm:gap-4">
             <div class="flex min-w-0 items-center gap-3">
@@ -179,9 +199,16 @@ async function applyChange(action: 'assign' | 'transfer' | 'remove', college: st
                 <p class="text-helper text-muted">{{ countLabel(college.studentCount, 'aluno', 'alunos') }}</p>
               </div>
             </div>
-            <BaseSelect v-if="organization.canEdit" :model-value="''" :options="options"
-              label="Motorista" :aria-label="`Motorista para ${college.college}`" placeholder="Selecione o motorista"
-              @update:model-value="applyChange('assign', college.college, $event)" />
+            <div v-if="organization.canEdit" class="grid gap-2">
+              <BaseSelect :model-value="pendingDrivers.get(college.college) ?? ''" :options="options"
+                label="Motorista" :aria-label="`Motorista para ${college.college}`" placeholder="Selecione o motorista"
+                @update:model-value="pendingDrivers.set(college.college, $event)" />
+              <BaseButton size="sm" class="justify-self-end" :disabled="!pendingDrivers.get(college.college)"
+                :aria-label="`Atribuir motorista a ${college.college}`"
+                @click="applyChange('assign', college.college, pendingDrivers.get(college.college))">
+                Atribuir
+              </BaseButton>
+            </div>
           </li>
         </ul>
         <p v-else class="mt-2 text-body text-muted">
@@ -214,8 +241,8 @@ async function applyChange(action: 'assign' | 'transfer' | 'remove', college: st
               </div>
               <BaseButton v-if="organization.canEdit" variant="outline" size="sm" class="ml-auto shrink-0"
                 :icon="ArrowLeftRight" aria-haspopup="dialog"
-                :aria-label="`Transferir ou remover a atribuição de ${college.college}`" @click="openEditor(college.college, $event)">
-                Transferir
+                :aria-label="`Editar atribuição de ${college.college}`" @click="openEditor(college.college, $event)">
+                Editar atribuição
               </BaseButton>
             </li>
           </ul>
@@ -226,14 +253,20 @@ async function applyChange(action: 'assign' | 'transfer' | 'remove', college: st
         Publicada por {{ organization.publication.author.name }} em
         <time :datetime="organization.publication.at">{{ publicationDate.format(new Date(organization.publication.at)) }}</time>
       </p>
-      <BaseButton v-if="organization.status === 'RASCUNHO'" :disabled="!organization.canPublish"
-        aria-haspopup="dialog" @click="openConfirmation('publish', $event)">
-        Publicar distribuição
-      </BaseButton>
       <BaseButton v-if="organization.canReopen" variant="outline" aria-haspopup="dialog"
         @click="openConfirmation('reopen', $event)">
         Reabrir distribuição
       </BaseButton>
+    </div>
+    <div v-if="showPublish" ref="publicationActions" class="space-y-2">
+      <BaseButton :disabled="!organization.canPublish" aria-haspopup="dialog"
+        :aria-describedby="publicationBlocked ? 'driver-publication-blocked' : undefined"
+        @click="openConfirmation('publish', $event)">
+        Publicar distribuição
+      </BaseButton>
+      <p v-if="publicationBlocked" id="driver-publication-blocked" role="status" class="text-helper text-muted">
+        {{ publicationBlocked }}
+      </p>
     </div>
     <BaseAlert v-if="transitionMessage" :variant="transitionError ? 'danger' : 'success'">
       <p ref="transitionFeedback" tabindex="-1">{{ transitionMessage }}</p>

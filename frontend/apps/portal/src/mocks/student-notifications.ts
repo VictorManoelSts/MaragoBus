@@ -21,5 +21,5 @@ const notices: readonly DemonstrationNotice[] = [
 ]
 
 export function getDemonstrationNotices(studentId?: string): readonly DemonstrationNotice[] {
-  return studentId === 'mock-student-test' ? notices : []
+  return import.meta.env.DEV && !import.meta.env.PROD && studentId === 'mock-student-test' ? notices : []
 }

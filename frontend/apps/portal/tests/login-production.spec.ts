@@ -2,6 +2,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { getMockReservationForm } from '../src/mocks/reservation-form'
+import { getDemonstrationNotices } from '../src/mocks/student-notifications'
 
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks() })
 
@@ -28,4 +30,11 @@ it('desabilita autenticação no formulário em produção e ignora cookie mock'
   await wrapper.get('form').trigger('submit')
   expect(login).not.toHaveBeenCalled()
   expect(session.authenticated).toBe(false)
+})
+
+it('ignora o identificador de aluno simulado nos dados de exemplo em produção', () => {
+  vi.stubEnv('DEV', false)
+  vi.stubEnv('PROD', true)
+  expect(getMockReservationForm('mock-student-test').college).toBeNull()
+  expect(getDemonstrationNotices('mock-student-test')).toEqual([])
 })

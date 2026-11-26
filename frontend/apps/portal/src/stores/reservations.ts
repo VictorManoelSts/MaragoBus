@@ -57,6 +57,7 @@ export const useReservationsStore = defineStore('reservations', () => {
 
   function countConfirmedByCollege(travelDate: TravelDate) {
     const counts = new Map<string, number>()
+    if (!session.authenticated || session.user?.role !== 'driver') return counts
     for (const reservation of reservations.value) {
       if (reservation.travelDate === travelDate && reservation.status === 'confirmed') {
         counts.set(reservation.college, (counts.get(reservation.college) ?? 0) + 1)

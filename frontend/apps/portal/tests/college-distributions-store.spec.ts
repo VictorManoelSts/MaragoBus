@@ -101,6 +101,27 @@ describe('Store da distribuição de faculdades', () => {
     expect(store.getDistribution(travelDate)?.status).toBe('RASCUNHO')
   })
 
+  it('publica data vazia sem rascunho na janela e preserva autorização e histórico', async () => {
+    const store = useCollegeDistributionsStore()
+    const emptyDate = '2026-11-17'
+    vi.setSystemTime(new Date('2026-11-17T13:59:59.999Z'))
+    expect(store.publish(emptyDate)).toBe('outside-window')
+    vi.setSystemTime(new Date('2026-11-17T14:00:00.000Z'))
+    await setMockSession('student')
+    expect(store.publish(emptyDate)).toBe('driver-required')
+    await setMockSession('driver')
+    expect(store.getDistribution(emptyDate)).toBeUndefined()
+    expect(store.publish(travelDate)).toBe('outside-window')
+    expect(store.publish(emptyDate)).toBe('published')
+    expect(store.publish(emptyDate)).toBe('not-draft')
+    expect(store.getDistribution(emptyDate)?.history.map(change => change.type)).toEqual(['created', 'published'])
+    vi.setSystemTime(new Date('2026-11-18T03:00:00.000Z'))
+    expect(store.publish(emptyDate)).toBe('outside-window')
+    expect(store.reopen(emptyDate)).toBe('outside-window')
+    expect(store.getDistribution(emptyDate)?.status).toBe('PUBLICADA')
+    expect(store.publish('2026-11-18')).toBe('outside-window')
+  })
+
   it('atualiza quantidades reativamente após cancelamento e mantém a atribuição', () => {
     const distributions = useCollegeDistributionsStore()
     const reservations = useReservationsStore()
@@ -115,15 +136,49 @@ describe('Store da distribuição de faculdades', () => {
     })
     useSessionStore().user = { id: 'aluno-a', name: 'Aluno aluno-a', role: 'student' }
     expect(reservations.cancel(reservations.studentReservations[0]!.id)).toBe('cancelled')
+    expect(distribution.value).toBeUndefined()
+    useSessionStore().user = driver
     expect(distribution.value?.colleges[0]).toMatchObject({
       studentCount: 1, driver: { id: driver.id, name: driver.name },
     })
     useSessionStore().user = { id: 'aluno-b', name: 'Aluno aluno-b', role: 'student' }
     expect(reservations.cancel(reservations.studentReservations[0]!.id)).toBe('cancelled')
+    expect(distribution.value).toBeUndefined()
+    useSessionStore().user = driver
     expect(distribution.value).toMatchObject({ status: 'PUBLICADA', totalStudents: 1 })
     expect(distribution.value?.colleges).toContainEqual({
       college: 'Faculdade A', studentCount: 0, driver: { id: driver.id, name: driver.name },
     })
+  })
+
+  it('protege as consultas por papel e restaura o acesso compartilhado entre motoristas', async () => {
+    const distributions = useCollegeDistributionsStore()
+    const reservations = useReservationsStore()
+    const session = useSessionStore()
+    const driver = { id: 'driver-a', name: 'Motorista A', role: 'driver' as const }
+    expect(distributions.assign(travelDate, 'Faculdade A', driver, true)).toBe('assigned')
+    const distribution = computed(() => distributions.getDistribution(travelDate))
+    const counts = computed(() => reservations.countConfirmedByCollege(travelDate))
+    const expectedDistribution = distribution.value
+    const expectedCounts = new Map([['Faculdade A', 2], ['Faculdade B', 1]])
+    expect(expectedDistribution).toMatchObject({ status: 'RASCUNHO', totalStudents: 3 })
+    expect(counts.value).toEqual(expectedCounts)
+
+    const expectDenied = () => {
+      expect(distribution.value).toBeUndefined()
+      expect(counts.value.size).toBe(0)
+    }
+
+    session.logout()
+    expectDenied()
+    await setMockSession('student')
+    expectDenied()
+    await setMockSession('admin')
+    expectDenied()
+
+    session.user = { id: 'driver-b', name: 'Motorista B', role: 'driver' }
+    expect(distribution.value).toEqual(expectedDistribution)
+    expect(counts.value).toEqual(expectedCounts)
   })
 
   it('preserva histórico com autor, instante e natureza da alteração', () => {
