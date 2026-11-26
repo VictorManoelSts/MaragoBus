@@ -7,7 +7,7 @@ import { useSessionStore } from '@maragobus/shared/auth/session'
 import { selectStudentDemo } from '@maragobus/shared/auth/student-demo'
 import { resolveStudentDemoSelection } from '../mocks/student-demo'
 import { applyDriverDemoPreference } from '@maragobus/shared/auth/driver-demo'
-import { studentNavigationItems } from './student-navigation'
+import { studentNavigationItems, studentNotificationsLink, studentReservationLink } from './student-navigation'
 import { driverNavigationItems } from './driver-navigation'
 
 declare module 'vue-router' {
@@ -16,13 +16,16 @@ declare module 'vue-router' {
   }
 }
 
+const studentLinks = [...studentNavigationItems, studentReservationLink, studentNotificationsLink] as const
+
 const studentPages = {
   home: () => import('../pages/HomePage.vue'),
+  receipt: () => import('../pages/StudentReceiptPage.vue'),
   'new-reservation': () => import('../pages/NewReservationPage.vue'),
   reservations: () => import('../pages/StudentReservationsPage.vue'),
   announcements: () => import('../pages/StudentNotificationsPage.vue'),
   profile: () => import('../pages/StudentProfilePage.vue'),
-} satisfies Record<typeof studentNavigationItems[number]['name'], () => Promise<{ default: Component }>>
+} satisfies Record<typeof studentLinks[number]['name'], () => Promise<{ default: Component }>>
 
 const driverPages = {
   'driver-reservations': () => import('../pages/DriverReservationsPage.vue'),
@@ -41,7 +44,7 @@ const routes: RouteRecordRaw[] = [
     path: '/',
     meta: { requiresAuth: true, allowedRoles: ['student'] },
     component: () => import('../layouts/StudentLayout.vue'),
-    children: studentNavigationItems.map(item => ({
+    children: studentLinks.map(item => ({
       path: item.path.slice(1),
       name: item.name,
       meta: { title: item.label },

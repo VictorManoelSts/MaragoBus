@@ -10,6 +10,7 @@ describe('AdminLayout', () => {
     expect(wrapper.findAll('header')).toHaveLength(1)
     expect(wrapper.findAll('main')).toHaveLength(1)
     expect(wrapper.get('header').find('main').exists()).toBe(false)
+    expect(wrapper.find('header a[href="/notificacoes"]').exists()).toBe(false)
   })
 
   it('usa o BrandLogo oficial e identifica a área administrativa', () => {

@@ -14,7 +14,7 @@ import { useSessionStore } from '../src/auth/session'
 import { mountAfterNavigation, syncSessionAccess } from '../src/auth/initialization'
 import type { AuthRole, SessionUser } from '../src/auth/contracts'
 
-const students = ['/', '/reservar', '/reservas', '/notificacoes', '/perfil']
+const students = ['/', '/comprovante', '/reservar', '/reservas', '/notificacoes', '/perfil']
 const drivers = ['/motorista/reservas', '/motorista/advertencias', '/motorista/perfil']
 const administrators = ['/', '/alunos', '/motoristas', '/faculdades', '/pontos-embarque', '/advertencias', '/perfil', '/cursos', '/cursos-ofertados', '/reservas']
 const roles = ['student', 'driver', 'admin'] as const

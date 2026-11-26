@@ -6,7 +6,7 @@ import { BaseAlert, BaseBadge, BaseButton, BaseCard } from '@maragobus/shared'
 import { useSessionStore } from '@maragobus/shared/auth/session'
 import ReservationReceiptModal from '../components/ReservationReceiptModal.vue'
 import { useReservationReceipt } from '../composables/useReservationReceipt'
-import { studentNavigationItems } from '../router/student-navigation'
+import { studentQuickLinks } from '../router/student-navigation'
 import { useReservationsStore } from '../stores/reservations'
 import { formatCivilDate } from '../utils/format-transport-date'
 import { getTransportDate } from '../utils/reservation-availability'
@@ -17,8 +17,7 @@ const reservations = useReservationsStore()
 const { reference, receipt, receiptUnavailable, openReceipt, closeReceipt } = useReservationReceipt()
 const summary = computed(() => reservations.getHomeSummary(getTransportDate(reference.value)))
 const studentName = computed(() => session.user?.name.trim().split(/\s+/)[0])
-const quickLinks = studentNavigationItems.filter(item =>
-  ['new-reservation', 'reservations', 'announcements'].includes(item.name))
+
 const statusLabels = { confirmed: 'Confirmada', cancelled: 'Cancelada' } as const
 </script>
 
@@ -79,15 +78,14 @@ const statusLabels = { confirmed: 'Confirmada', cancelled: 'Cancelada' } as cons
 
     <nav aria-labelledby="quick-links-title" class="space-y-3">
       <h2 id="quick-links-title" class="text-subtitle">Acessos rápidos</h2>
-      <ul class="grid gap-2 sm:grid-cols-3">
-        <li v-for="item in quickLinks" :key="item.name" class="min-w-0">
+      <ul class="grid gap-2 sm:grid-cols-2">
+        <li v-for="item in studentQuickLinks" :key="item.name" class="min-w-0">
           <RouterLink :to="item.path" class="mb-button mb-button--ghost mb-button--md w-full justify-start gap-3">
             <component :is="item.icon" :size="20" class="shrink-0" aria-hidden="true" />
             <span>{{ item.label }}</span>
           </RouterLink>
         </li>
       </ul>
-      <p class="text-helper text-muted">Em Notificações, você encontra os avisos administrativos.</p>
     </nav>
     <ReservationReceiptModal :reservation="receipt" @close="closeReceipt" />
   </div>

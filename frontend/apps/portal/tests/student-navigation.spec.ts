@@ -10,11 +10,15 @@ import { createPortalRouter } from '../src/router'
 import { setMockSession } from '../../../packages/shared/tests/auth-fixture'
 
 const destinations = [
-  { path: '/', label: 'Início', title: 'Olá, Aluno!' },
-  { path: '/reservar', label: 'Fazer reserva', title: 'Fazer reserva' },
-  { path: '/reservas', label: 'Minhas reservas', title: 'Minhas reservas' },
-  { path: '/notificacoes', label: 'Notificações', title: 'Notificações' },
-  { path: '/perfil', label: 'Meu perfil', title: 'Meu perfil' },
+  { path: '/', desktop: 'Início', mobile: 'Início', title: 'Olá, Aluno!' },
+  { path: '/comprovante', desktop: 'Comprovante', mobile: 'Comprovante', title: 'Comprovante' },
+  { path: '/reservas', desktop: 'Minhas reservas', mobile: 'Reservas', title: 'Minhas reservas' },
+  { path: '/perfil', desktop: 'Meu perfil', mobile: 'Perfil', title: 'Meu perfil' },
+]
+const pages = [
+  ...destinations,
+  { path: '/reservar', title: 'Fazer reserva' },
+  { path: '/notificacoes', title: 'Notificações' },
 ]
 const variants = ['desktop', 'mobile'] as const
 
@@ -38,14 +42,15 @@ async function application(path = '/') {
 }
 
 describe.each(variants)('Navegação do aluno: %s', variant => {
-  it('renderiza exatamente os cinco destinos com rótulos, ícones e nav acessível', async () => {
+  it('renderiza exatamente os quatro destinos com rótulos, ícones e nav acessível', async () => {
     const { wrapper } = await navigation(variant)
     expect(wrapper.element.tagName).toBe('NAV')
     expect(wrapper.attributes('aria-label')).toBe('Navegação do aluno')
-    expect(wrapper.findAll('li')).toHaveLength(5)
-    expect(wrapper.findAll('a').map(link => ({ path: link.attributes('href'), label: link.get('.wrap-anywhere').text() })))
-      .toEqual(destinations.map(({ path, label }) => ({ path, label })))
-    expect(wrapper.findAll('svg')).toHaveLength(5)
+    expect(wrapper.findAll('li')).toHaveLength(4)
+    expect(wrapper.findAll('a').map(link => ({ path: link.attributes('href'), label: link.text() })))
+      .toEqual(destinations.map(item => ({ path: item.path, label: item[variant] })))
+    expect(wrapper.findAll('svg')).toHaveLength(4)
+    expect(wrapper.get('a[href="/comprovante"] svg').classes()).toContain('lucide-ticket')
     for (const link of wrapper.findAll('a')) {
       expect(link.get('svg').attributes('aria-hidden')).toBe('true')
       expect(link.attributes('tabindex')).toBeUndefined()
@@ -53,7 +58,7 @@ describe.each(variants)('Navegação do aluno: %s', variant => {
     }
   })
 
-  it.each(destinations)('indica somente $label como página ativa em $path', async ({ path }) => {
+  it.each(destinations)('indica somente $path como página ativa em $path', async ({ path }) => {
     const { wrapper } = await navigation(variant, path)
     const current = wrapper.findAll('a[aria-current="page"]')
     expect(current).toHaveLength(1)
@@ -62,7 +67,7 @@ describe.each(variants)('Navegação do aluno: %s', variant => {
     if (path !== '/') expect(wrapper.get('a[href="/"]').attributes('aria-current')).toBeUndefined()
   })
 
-  it('navega pelos cinco destinos via RouterLink sem recarregar a aplicação', async () => {
+  it('navega pelos quatro destinos via RouterLink sem recarregar a aplicação', async () => {
     const { wrapper, router } = await navigation(variant)
     for (const { path } of [...destinations.slice(1), destinations[0]!]) {
       await wrapper.get('a[href="' + path + '"]').trigger('click')
@@ -76,7 +81,7 @@ describe.each(variants)('Navegação do aluno: %s', variant => {
 describe('Integração das páginas do aluno', () => {
   afterEach(() => vi.useRealTimers())
 
-  it.each(destinations)('renderiza $path com o layout e título corretos', async ({ path, title }) => {
+  it.each(pages)('renderiza $path com o layout e título corretos', async ({ path, title }) => {
     if (path === '/reservar') vi.setSystemTime(new Date('2026-11-16T13:59:00Z'))
     const { wrapper } = await application(path)
     expect(wrapper.findComponent(StudentLayout).exists()).toBe(true)
@@ -93,6 +98,7 @@ describe('Integração das páginas do aluno', () => {
     } else if (path === '/reservas') expect(card.text()).toContain('Você ainda não tem reservas.')
     else if (path === '/perfil') expect(card.text()).toContain('Dados do aluno')
     else if (path === '/notificacoes') expect(card.text()).toContain('Exemplo de comunicado')
+    else if (path === '/comprovante') expect(wrapper.get('main p').text()).toContain('próxima atualização')
     else expect(card.text()).toBe('Sua reserva atualVocê não tem uma reserva atual para apresentar.Fazer reserva')
     expect(wrapper.get('main p').text().length).toBeGreaterThan(20)
     expect(wrapper.get('main').findAll('input, select, form')).toHaveLength(path === '/perfil' ? 2 : path === '/reservar' ? 1 : 0)
@@ -121,7 +127,7 @@ describe('Integração das páginas do aluno', () => {
     expect(mobileRegion.classList.contains('fixed')).toBe(false)
     expect(mobileRegion.classList.contains('absolute')).toBe(false)
     expect(mobile!.get('ul').classes()).toContain('grid')
-    expect(mobile!.get('ul').element.style.gridTemplateColumns).toMatch(/^repeat\(5, minmax\(0(?:px)?, 1fr\)\)$/)
+    expect(mobile!.get('ul').element.style.gridTemplateColumns).toMatch(/^repeat\(4, minmax\(0(?:px)?, 1fr\)\)$/)
     expect(mobile!.classes()).toContain('portal-navigation--mobile')
     expect(mobile!.get('a').classes()).toEqual(expect.arrayContaining(['min-h-16', 'text-xs', 'sm:text-helper']))
     expect(wrapper.get('main').classes()).toContain('min-w-0')
@@ -169,12 +175,11 @@ describe('Integração das páginas do aluno', () => {
     expect(wrapper.findAll('main button').some(button => button.text() === 'Sair')).toBe(true)
   })
 
-  it('permite quebra dos novos rótulos no mobile sem truncá-los nem fixar sua largura', async () => {
+  it('mantém os quatro rótulos mobile em uma linha', async () => {
     const { wrapper } = await navigation('mobile')
-    for (const link of wrapper.findAll('a')) expect(link.get('span').classes()).toContain('wrap-anywhere')
+    for (const link of wrapper.findAll('a')) expect(link.get('span').classes()).toContain('whitespace-nowrap')
     for (const item of wrapper.findAll('li')) expect(item.classes()).toContain('min-w-0')
-    expect(wrapper.text()).toContain('Minhas reservas')
-    expect(wrapper.text()).toContain('Fazer reserva')
+
   })
 })
 
@@ -189,10 +194,14 @@ describe('Compatibilidade das rotas do aluno', () => {
     expect(router.currentRoute.value.path).toBe(to)
     expect(wrapper.get('main h1').text()).toBe(title)
     for (const nav of wrapper.findAllComponents(StudentNavigation)) {
-      expect(nav.findAll('a')).toHaveLength(5)
-      expect(nav.get('a[aria-current="page"]').attributes('href')).toBe(to)
+      expect(nav.findAll('a')).toHaveLength(4)
+      const active = nav.find('a[aria-current="page"]')
+      if (to === '/notificacoes') expect(active.exists()).toBe(false)
+      else expect(active.attributes('href')).toBe(to)
       expect(nav.find('a[href="' + from + '"]').exists()).toBe(false)
     }
+    const bell = wrapper.get('header a[href="/notificacoes"]')
+    expect(bell.attributes('aria-current')).toBe(to === '/notificacoes' ? 'page' : undefined)
   })
 
   it.each(redirects)('preserva query e hash ao redirecionar $from', async ({ from, to }) => {
@@ -207,6 +216,7 @@ describe('Compatibilidade das rotas do aluno', () => {
     for (const [name, path] of [
       ['home', '/'], ['reservations', '/reservas'], ['profile', '/perfil'],
       ['history', '/reservas'], ['announcements', '/notificacoes'],
+      ['receipt', '/comprovante'], ['new-reservation', '/reservar'],
     ]) {
       await router.push({ name })
       expect(router.currentRoute.value.path).toBe(path)

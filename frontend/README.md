@@ -93,16 +93,19 @@ As configurações Vite, os HTMLs de entrada e os arquivos TypeScript complement
 ## Layouts e navegação
 
 - O Portal usa `PortalLayout` como base dos layouts de aluno e motorista. Cabeçalho e área de conteúdo são fluidos. Preserve o espaço restante do `main` com `min-w-0` e limite a largura apenas onde fizer sentido, como em descrições com `max-w-prose`.
-- As duas navegações do Portal compartilham o mesmo breakpoint `lg` (1024 px). A sidebar aparece no desktop. A barra inferior mobile permanece no fluxo com `sticky`, cinco destinos para aluno e três para motorista. Cada conjunto deriva de sua configuração de rotas. Mantenha rótulos visíveis, foco e `aria-current="page"`.
+- As duas navegações do Portal compartilham o mesmo breakpoint `lg` (1024 px). A sidebar aparece no desktop. A barra inferior mobile permanece no fluxo com `sticky`, quatro destinos para aluno e três para motorista. Cada conjunto deriva de sua configuração de rotas. Mantenha rótulos visíveis, foco e `aria-current="page"`.
 - O Admin usa `AdminShell` para compor `AdminLayout`, sidebar desktop e drawer mobile. Sidebar e drawer compartilham os grupos Principal e Gerenciamento complementar de `adminNavigationGroups`, que também fornece os itens do roteador.
 - O drawer usa diálogo nativo e rolagem interna, bloqueia a rolagem do fundo e contém Tab/Shift+Tab. Fecha pelo botão, Escape, backdrop, seleção ou mudança de rota e ao atingir o breakpoint desktop. O fechamento manual devolve o foco ao acionador quando presente. Após navegar, o foco segue para o `main`.
 - Preserve o atalho **Ir para o conteúdo principal**, o `main` focável e um título principal por página. Use links nativos do Vue Router para navegação.
 
 | Área | Destinos |
 | --- | --- |
-| Aluno | `/`, `/reservar`, `/reservas`, `/notificacoes`, `/perfil` |
+| Aluno | `/`, `/comprovante`, `/reservas`, `/perfil` |
 | Motorista | `/motorista/reservas`, `/motorista/advertencias`, `/motorista/perfil` |
 | Admin | Principal: visão geral, alunos, motoristas, faculdades, pontos de embarque, solicitações de advertência e perfil. Complementar: cursos, cursos ofertados e reservas. |
+
+No Portal do aluno, o sino no cabeçalho exibe a contagem de avisos não lidos e
+leva a `/notificacoes`. Os atalhos de reserva continuam levando a `/reservar`.
 
 No Portal, `/historico` redireciona para `/reservas`, `/avisos` para
 `/notificacoes`. O Portal também redireciona `/motorista`, `/motorista/faculdades`,

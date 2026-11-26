@@ -30,8 +30,8 @@ withDefaults(defineProps<{
             : 'min-h-16 flex-col items-center justify-center gap-1 px-1 py-2 text-center text-xs sm:text-helper'"
         >
           <component :is="item.icon" :size="20" class="shrink-0" aria-hidden="true" />
-          <span class="wrap-anywhere">{{ item.label }}</span>
-          <slot name="item-decoration" :item="item" />
+          <span v-if="variant === 'mobile' && item.mobileLabel" class="whitespace-nowrap">{{ item.mobileLabel }}</span>
+          <span v-else class="wrap-anywhere">{{ item.label }}</span>
         </RouterLink>
       </li>
     </ul>

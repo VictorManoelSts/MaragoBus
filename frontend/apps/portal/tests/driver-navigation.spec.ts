@@ -87,6 +87,7 @@ describe('Navegação do motorista', () => {
       clearDriverDemoSession()
     }
 
+    expect(wrapper.find('header a[href="/notificacoes"]').exists()).toBe(false)
     await setMockSession('student')
     await flushPromises()
     expect(wrapper.findComponent(DriverLayout).exists()).toBe(false)
@@ -139,19 +140,22 @@ describe('Navegação do motorista', () => {
     expect(wrapper.get('main').element.parentElement!.nextElementSibling).toBe(mobile!.element.parentElement)
   })
 
-  it('preserva as rotas e os cinco destinos do aluno ao trocar para sessão de aluno', async () => {
+  it('preserva as rotas e os quatro destinos do aluno ao trocar para sessão de aluno', async () => {
     const { wrapper, router } = await application('/motorista/reservas')
+    expect(wrapper.find('header a[href="/notificacoes"]').exists()).toBe(false)
     await setMockSession('student')
-    for (const path of ['/', '/reservar', '/reservas', '/notificacoes', '/perfil']) {
+    for (const path of ['/', '/comprovante', '/reservar', '/reservas', '/notificacoes', '/perfil']) {
       await router.push(path)
       await flushPromises()
       expect(router.currentRoute.value.path).toBe(path)
       expect(wrapper.findComponent(DriverLayout).exists()).toBe(false)
       expect(wrapper.findAllComponents(StudentNavigation)).toHaveLength(2)
       for (const nav of wrapper.findAllComponents(StudentNavigation)) {
-        expect(nav.findAll('a')).toHaveLength(5)
+        expect(nav.findAll('a')).toHaveLength(4)
         expect(nav.attributes('aria-label')).toBe('Navegação do aluno')
-        expect(nav.get('a[aria-current="page"]').attributes('href')).toBe(path)
+        const active = nav.find('a[aria-current="page"]')
+        if (path === '/reservar' || path === '/notificacoes') expect(active.exists()).toBe(false)
+        else expect(active.attributes('href')).toBe(path)
       }
     }
   })

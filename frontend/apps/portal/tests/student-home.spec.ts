@@ -115,7 +115,7 @@ describe('Página inicial do aluno', () => {
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/reservar'))
   })
 
-  it.each(['/reservar', '/reservas', '/notificacoes'])('atalho acessível navega para %s', async path => {
+  it.each(['/reservar', '/reservas'])('atalho acessível navega para %s', async path => {
     const { wrapper, router } = await page()
     const link = wrapper.get(`nav a[href="${path}"]`)
     expect(link.attributes('tabindex')).toBeUndefined()
@@ -125,10 +125,10 @@ describe('Página inicial do aluno', () => {
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe(path))
   })
 
-  it('reserva notificações a avisos administrativos, sem contadores ou ações fictícias', async () => {
+  it('mantém os acessos rápidos da página inicial voltados às reservas', async () => {
     const { wrapper } = await page()
-    expect(wrapper.text()).toContain('avisos administrativos')
-    expect(wrapper.findAll('nav a').map(link => link.text())).toEqual(['Fazer reserva', 'Minhas reservas', 'Notificações'])
+    expect(wrapper.find('nav a[href="/notificacoes"]').exists()).toBe(false)
+    expect(wrapper.findAll('nav a').map(link => link.text())).toEqual(['Fazer reserva', 'Minhas reservas'])
     expect(wrapper.text()).not.toMatch(/não lidas|notificação de confirmação|download|comprovante|cancelar/i)
     expect(wrapper.find('button').exists()).toBe(false)
   })

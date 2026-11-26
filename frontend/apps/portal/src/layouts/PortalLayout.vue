@@ -61,6 +61,7 @@ onBeforeUnmount(() => {
     <header class="border-t-2 border-t-accent border-b border-line bg-surface">
       <div class="flex w-full items-center px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
         <BrandLogo class="w-44 sm:w-52" />
+        <slot name="header-actions" />
       </div>
     </header>
 

@@ -4,6 +4,7 @@ export interface PortalNavigationItem {
   name: string
   path: string
   label: string
+  mobileLabel?: string
   icon: Component
   title?: string
   description?: string
