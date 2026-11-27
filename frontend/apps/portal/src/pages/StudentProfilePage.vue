@@ -30,6 +30,16 @@ function resetDraft() {
 
 watch([() => profile.student?.id, () => profile.preferences], resetDraft)
 
+async function reportFeedback(message: string) {
+  const active = document.activeElement
+  await nextTick()
+  feedback.value = message
+  if (active instanceof HTMLButtonElement && active.disabled && form.value?.contains(active)
+    && (document.activeElement === active || document.activeElement === document.body)) {
+    form.value.querySelector<HTMLInputElement>('input[type="email"]')?.focus()
+  }
+}
+
 async function save() {
   if (!dirty.value) return
   if (!profile.savePreferences(draft)) {
@@ -38,18 +48,17 @@ async function save() {
     form.value?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
     return
   }
-  await nextTick()
-  feedback.value = 'Alterações salvas.'
+  await reportFeedback('Alterações salvas.')
 }
 
 function discard() {
   resetDraft()
-  feedback.value = 'Alterações descartadas.'
+  void reportFeedback('Alterações descartadas.')
 }
 </script>
 
 <template>
-  <div class="max-w-3xl space-y-5">
+  <div class="min-w-0 max-w-3xl space-y-5 wrap-anywhere">
     <h1 class="text-page">Meu perfil</h1>
 
     <form
@@ -62,14 +71,14 @@ function discard() {
     >
       <BaseCard>
         <template #header><h2 class="text-section">Dados pessoais</h2></template>
-        <dl class="grid gap-4 sm:grid-cols-2">
+        <dl class="grid min-w-0 gap-4 sm:grid-cols-2">
           <div class="min-w-0">
             <dt class="text-helper text-muted">Nome completo</dt>
-            <dd class="text-body wrap-break-word">{{ profile.student?.name ?? 'Não informado' }}</dd>
+            <dd class="text-body wrap-anywhere">{{ profile.student?.name ?? 'Não informado' }}</dd>
           </div>
-          <div>
+          <div class="min-w-0">
             <dt class="text-helper text-muted">CPF</dt>
-            <dd class="text-body">{{ profile.registration?.cpf ?? 'Não informado' }}</dd>
+            <dd class="text-body wrap-anywhere">{{ profile.registration?.cpf ?? 'Não informado' }}</dd>
           </div>
         </dl>
         <div class="mt-4 space-y-4">
@@ -86,16 +95,16 @@ function discard() {
             :error="errors?.boardingPointId"
           />
           <div class="flex flex-col gap-2 sm:flex-row">
-            <BaseButton type="submit" :disabled="!profile.student || !dirty">Salvar alterações</BaseButton>
-            <BaseButton type="button" variant="outline" :disabled="!dirty" @click="discard">Descartar alterações</BaseButton>
+            <BaseButton class="w-full sm:w-auto" type="submit" :disabled="!profile.student || !dirty">Salvar alterações</BaseButton>
+            <BaseButton class="w-full sm:w-auto" type="button" variant="outline" :disabled="!dirty" @click="discard">Descartar alterações</BaseButton>
           </div>
-          <p role="status" aria-atomic="true" class="text-helper text-muted empty:m-0">{{ feedback }}</p>
+          <p role="status" aria-live="polite" aria-atomic="true" class="text-helper text-muted empty:m-0">{{ feedback }}</p>
         </div>
       </BaseCard>
 
       <BaseCard>
         <template #header><h2 class="text-section">Dados acadêmicos</h2></template>
-        <dl class="grid gap-4 sm:grid-cols-3">
+        <dl class="grid min-w-0 gap-4 sm:grid-cols-3">
           <div v-for="field in academicFields" :key="field.label" class="min-w-0">
             <dt class="text-helper text-muted">{{ field.label }}</dt>
             <dd class="text-body wrap-break-word">{{ field.value ?? 'Não informado' }}</dd>

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve as resolvePath } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory } from 'vue-router'
@@ -31,6 +33,13 @@ describe('Notificações do aluno', () => {
   afterEach(() => {
     selectStudentDemo(null)
     vi.useRealTimers()
+  })
+
+  it('limita a largura e a altura do painel ao espaço disponível na janela', () => {
+    const component = readFileSync(resolvePath('apps/portal/src/components/StudentNotificationsPanel.vue'), 'utf8')
+    expect(component).toContain('width: min(26rem, calc(100cqw - 2rem))')
+    expect(component).toContain('max-height: calc(100dvh - 6rem - env(safe-area-inset-top) - env(safe-area-inset-bottom))')
+    expect(component).toMatch(/@media \(max-height: 24rem\) \{\s*\.notification-panel \{\s*overflow-y: auto/)
   })
 
   it('abre sem navegar, nomeia o painel e move o foco para o título', async () => {

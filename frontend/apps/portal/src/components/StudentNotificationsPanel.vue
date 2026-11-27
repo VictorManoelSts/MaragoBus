@@ -125,7 +125,7 @@ function markAllAsRead(event: MouseEvent) {
         </BaseButton>
       </div>
 
-      <div class="min-h-0 space-y-3 overflow-y-auto overscroll-contain p-4 wrap-anywhere">
+      <div class="notification-panel__content min-h-0 space-y-3 overflow-y-auto overscroll-contain p-4 wrap-anywhere">
         <p v-if="!store.notifications.length" class="text-body text-muted">Você ainda não tem notificações.</p>
         <template v-else>
           <div class="flex flex-wrap items-center justify-between gap-2">
@@ -170,7 +170,19 @@ function markAllAsRead(event: MouseEvent) {
 
 <style scoped>
 .notification-panel {
-  width: min(26rem, calc(100vw - 2rem - env(safe-area-inset-left) - env(safe-area-inset-right)));
+  width: min(26rem, calc(100cqw - 2rem));
   max-height: calc(100dvh - 6rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
+
+@media (max-height: 24rem) {
+  .notification-panel {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .notification-panel__content {
+    flex-shrink: 0;
+    overflow: visible;
+  }
 }
 </style>

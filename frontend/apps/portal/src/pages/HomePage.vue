@@ -56,6 +56,18 @@ const availabilityChanged = ref(false)
 const lastConfirmedId = ref<string>()
 const currentTitle = ref<HTMLHeadingElement>()
 const upcomingTitle = ref<HTMLHeadingElement>()
+const pageTitle = ref<HTMLHeadingElement>()
+const reservationForm = ref<HTMLFormElement>()
+const availabilityNotice = ref<HTMLElement>()
+const closedNotice = ref<HTMLElement>()
+const suspensionNotice = ref<HTMLElement>()
+const closedTitle = computed(() => closure.value ? 'Transporte interrompido' : 'Reservas fechadas')
+
+function focusAvailability() {
+  const target = availabilityNotice.value ?? suspensionNotice.value ?? closedNotice.value ?? pageTitle.value
+  target?.focus()
+}
+
 watch(targetDate, () => { pointOverride.value = null }, { flush: 'sync' })
 watch(() => reservations.studentId, () => {
   pointOverride.value = null
@@ -71,6 +83,11 @@ const confirmationRequest = computed(() => ({
 }))
 const eligibility = computed(() => reservations.validateConfirmation(confirmationRequest.value, availability.value, reference.value).status)
 const showForm = computed(() => eligibility.value === 'ready' || (eligibility.value === 'point-required' && options.value.length > 0))
+watch(showForm, async visible => {
+  if (visible || !reservationForm.value?.contains(document.activeElement)) return
+  await nextTick()
+  if (document.activeElement === document.body) focusAvailability()
+})
 const unavailableReason = computed(() => {
   switch (eligibility.value) {
     case 'student-required': return 'Entre com uma conta de aluno para reservar.'
@@ -96,6 +113,9 @@ async function confirmReservation() {
     await nextTick()
     const title = result.reservation.travelDate === today.value ? currentTitle : upcomingTitle
     if (lastConfirmedId.value === result.reservation.id) title.value?.focus()
+  } else if (availabilityChanged.value) {
+    await nextTick()
+    focusAvailability()
   }
 }
 
@@ -105,21 +125,23 @@ const transportHourFormat = new Intl.DateTimeFormat('pt-BR', {
 </script>
 
 <template>
-  <div class="student-home min-w-0 space-y-4">
+  <div class="student-home min-w-0 space-y-4 wrap-anywhere">
     <header class="space-y-1">
-      <h1 class="text-page">{{ studentName ? `Olá, ${studentName}!` : 'Olá!' }}</h1>
+      <h1 ref="pageTitle" tabindex="-1" class="text-page">{{ studentName ? `Olá, ${studentName}!` : 'Olá!' }}</h1>
       <p class="max-w-prose text-body text-muted">Acompanhe e gerencie suas reservas de transporte.</p>
     </header>
 
-    <BaseAlert v-if="suspension" variant="warning" title="Suspensão administrativa">
-      <p>Cenário demonstrativo de suspensão {{ suspension.kind === 'determined' ? 'com prazo determinado' : 'por prazo indeterminado' }}.</p>
-      <p>Durante a suspensão, você não pode fazer novas reservas.</p>
-      <p v-if="suspension.kind === 'determined'">
-        Retorno previsto em <time :datetime="suspension.returnDate">{{ formatCivilDate(suspension.returnDate) }}</time>
-        (horário de Alagoas).
-      </p>
-      <p v-else>Sem previsão de retorno.</p>
-    </BaseAlert>
+    <div v-if="suspension" ref="suspensionNotice" tabindex="-1" role="group" aria-label="Suspensão administrativa">
+      <BaseAlert variant="warning" title="Suspensão administrativa">
+        <p>Cenário demonstrativo de suspensão {{ suspension.kind === 'determined' ? 'com prazo determinado' : 'por prazo indeterminado' }}.</p>
+        <p>Durante a suspensão, você não pode fazer novas reservas.</p>
+        <p v-if="suspension.kind === 'determined'">
+          Retorno previsto em <time :datetime="suspension.returnDate">{{ formatCivilDate(suspension.returnDate) }}</time>
+          (horário de Alagoas).
+        </p>
+        <p v-else>Sem previsão de retorno.</p>
+      </BaseAlert>
+    </div>
 
     <section v-if="summary.currentReservation" aria-labelledby="current-reservation-title">
       <BaseCard>
@@ -180,13 +202,16 @@ const transportHourFormat = new Intl.DateTimeFormat('pt-BR', {
       </BaseCard>
     </section>
 
-    <BaseAlert v-if="availabilityChanged && !suspension" variant="warning">
-      A disponibilidade mudou. Confira a data da viagem antes de tentar confirmar novamente.
-    </BaseAlert>
+    <div v-if="availabilityChanged && !suspension" ref="availabilityNotice" tabindex="-1"
+      role="group" aria-labelledby="reservation-availability-notice">
+      <BaseAlert variant="warning">
+        <p id="reservation-availability-notice">A disponibilidade mudou. Confira a data da viagem antes de tentar confirmar novamente.</p>
+      </BaseAlert>
+    </div>
 
-    <section v-if="showForm && openWindow" aria-labelledby="reservation-form-title">
+    <section v-if="showForm && openWindow">
       <BaseCard>
-        <form class="space-y-3" @submit.prevent="confirmReservation">
+        <form ref="reservationForm" class="space-y-3" aria-labelledby="reservation-form-title" @submit.prevent="confirmReservation">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <h2 id="reservation-form-title" class="text-subtitle">Fazer reserva</h2>
             <BaseBadge variant="success">Reservas abertas</BaseBadge>
@@ -206,22 +231,25 @@ const transportHourFormat = new Intl.DateTimeFormat('pt-BR', {
             id="reservation-boarding-point" v-model="selectedPointId"
             label="Ponto de embarque" :options="options" placeholder="Escolha um ponto de embarque"
             help="Alterações no ponto valem apenas para esta reserva."
+            required
           />
           <BaseButton type="submit" :disabled="eligibility !== 'ready'" class="w-full sm:w-auto">Confirmar reserva</BaseButton>
         </form>
       </BaseCard>
     </section>
-    <BaseAlert v-else-if="!suspension && !openWindow" variant="warning" :title="closure ? 'Transporte interrompido' : 'Reservas fechadas'">
-      <template v-if="closure">
-        <p>Não haverá transporte em <time :datetime="closure.date">{{ formatCivilDate(closure.date) }}</time>.</p>
-        <p v-if="closure.reason">{{ closure.reason }}</p>
-        <p v-if="closure.description">{{ closure.description }}</p>
-      </template>
-      <template v-if="nextWindow">
-        <p>Próxima abertura em <time :datetime="nextWindow.opensAt.toISOString()">{{ formatTransportDateTime(nextWindow.opensAt) }}</time> (horário de Alagoas).</p>
-        <p>Viagem em <time :datetime="nextWindow.travelDate">{{ formatCivilDate(nextWindow.travelDate) }}</time>.</p>
-      </template>
-    </BaseAlert>
+    <div v-else-if="!suspension && !openWindow" ref="closedNotice" tabindex="-1" role="group" :aria-label="closedTitle">
+      <BaseAlert variant="warning" :title="closedTitle">
+        <template v-if="closure">
+          <p>Não haverá transporte em <time :datetime="closure.date">{{ formatCivilDate(closure.date) }}</time>.</p>
+          <p v-if="closure.reason">{{ closure.reason }}</p>
+          <p v-if="closure.description">{{ closure.description }}</p>
+        </template>
+        <template v-if="nextWindow">
+          <p>Próxima abertura em <time :datetime="nextWindow.opensAt.toISOString()">{{ formatTransportDateTime(nextWindow.opensAt) }}</time> (horário de Alagoas).</p>
+          <p>Viagem em <time :datetime="nextWindow.travelDate">{{ formatCivilDate(nextWindow.travelDate) }}</time>.</p>
+        </template>
+      </BaseAlert>
+    </div>
     <BaseAlert v-else-if="unavailableReason" variant="warning" title="Reserva indisponível">{{ unavailableReason }}</BaseAlert>
 
     <p class="sr-only" role="status">{{ announcement }}</p>

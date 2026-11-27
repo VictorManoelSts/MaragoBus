@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { CalendarDays, GraduationCap, MapPin, UserRound } from '@lucide/vue'
 import { BaseAlert, BaseBadge, BaseCard, BrandLogo } from '@maragobus/shared'
 import { useSessionStore } from '@maragobus/shared/auth/session'
@@ -28,10 +28,21 @@ const state = computed(() => {
   }, undefined)
   return cancelled ? { kind: 'cancelled', date: cancelled } as const : { kind: 'empty' } as const
 })
+const announcement = ref('')
+const statusMessage = computed(() => {
+  const receipt = state.value
+  switch (receipt.kind) {
+    case 'available': return `Comprovante disponível para ${formatCivilDate(receipt.reservation.travelDate)}.`
+    case 'future': return `Comprovante disponível a partir das 00h de ${formatCivilDate(receipt.date)} (horário de Alagoas).`
+    case 'cancelled': return `Reserva de ${formatCivilDate(receipt.date)} cancelada. Comprovante indisponível.`
+    case 'empty': return 'Você não tem reservas para hoje ou para os próximos dias.'
+  }
+})
+watch(statusMessage, message => { announcement.value = message })
 </script>
 
 <template>
-  <BaseCard class="mx-auto w-full max-w-md">
+  <BaseCard class="mx-auto w-full min-w-0 max-w-md">
     <header class="mb-4 flex flex-col items-center gap-2 text-center">
       <BrandLogo class="w-36" />
       <h1 class="text-page">Comprovante</h1>
@@ -42,7 +53,7 @@ const state = computed(() => {
     <div v-if="state.kind === 'available'" class="min-w-0 space-y-4">
       <div class="flex items-center justify-center gap-3 border-y border-line py-3">
         <CalendarDays :size="22" class="shrink-0 text-identity" aria-hidden="true" />
-        <div>
+        <div class="min-w-0">
           <p class="text-helper text-muted">Data da viagem</p>
           <time :datetime="state.reservation.travelDate" class="text-subtitle">{{ formatCivilDate(state.reservation.travelDate) }}</time>
         </div>
@@ -66,12 +77,13 @@ const state = computed(() => {
       <BaseAlert variant="warning">Comprovante demonstrativo — sem validade para embarque</BaseAlert>
     </div>
 
-    <BaseAlert v-else-if="state.kind === 'future'" variant="info">
+    <BaseAlert v-else-if="state.kind === 'future'" variant="info" aria-live="off">
       O comprovante estará disponível em <time :datetime="state.date">{{ formatCivilDate(state.date) }}</time> às 00h (horário de Alagoas).
     </BaseAlert>
-    <BaseAlert v-else-if="state.kind === 'cancelled'" variant="warning">
+    <BaseAlert v-else-if="state.kind === 'cancelled'" variant="warning" aria-live="off">
       A reserva de <time :datetime="state.date">{{ formatCivilDate(state.date) }}</time> foi cancelada. O comprovante está indisponível.
     </BaseAlert>
-    <BaseAlert v-else variant="info"><p>Você não tem reservas para hoje ou para os próximos dias.</p></BaseAlert>
+    <BaseAlert v-else variant="info" aria-live="off"><p>Você não tem reservas para hoje ou para os próximos dias.</p></BaseAlert>
+    <p class="sr-only" role="status">{{ announcement }}</p>
   </BaseCard>
 </template>

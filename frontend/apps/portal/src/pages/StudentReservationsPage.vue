@@ -65,6 +65,12 @@ const groups = computed(() => {
     { key: 'past', title: 'Anteriores', items: reservations.filter(item => item.travelDate < date).reverse() },
   ].filter(group => group.items.length > 0)
 })
+const resultsAnnouncement = computed(() => {
+  const count = groups.value.reduce((total, group) => total + group.items.length, 0)
+  const countLabel = count === 1 ? '1 reserva encontrada' : `${count} reservas encontradas`
+  const label = filters.find(option => option.value === filter.value)?.label
+  return `Filtro ${label}. ${countLabel}.`
+})
 </script>
 
 <template>
@@ -95,10 +101,11 @@ const groups = computed(() => {
         >{{ option.label }}</span>
       </label>
     </fieldset>
+    <p class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ resultsAnnouncement }}</p>
 
     <BaseCard v-if="!groups.length">
       <div class="space-y-3">
-        <p class="text-body" role="status">{{ emptyMessages[filter] }}</p>
+        <p class="text-body">{{ emptyMessages[filter] }}</p>
         <RouterLink
           v-if="filter === 'all'"
           :to="{ name: 'home' }" class="mb-button mb-button--primary mb-button--sm w-full sm:w-auto"
@@ -112,7 +119,7 @@ const groups = computed(() => {
         <ul class="grid min-w-0 gap-3 lg:grid-cols-2">
           <li v-for="reservation in group.items" :key="reservation.id" class="min-w-0">
             <BaseCard>
-              <div class="space-y-2">
+              <div class="min-w-0 space-y-2 wrap-anywhere">
                 <div class="flex flex-wrap items-center justify-between gap-2">
                   <time :datetime="reservation.travelDate" class="text-subtitle">
                     {{ formatCivilDate(reservation.travelDate) }}
@@ -122,11 +129,11 @@ const groups = computed(() => {
                   </BaseBadge>
                 </div>
                 <dl class="grid min-w-0 gap-2 sm:grid-cols-2">
-                  <div>
+                  <div class="min-w-0">
                     <dt class="text-helper text-muted">Faculdade</dt>
                     <dd class="text-helper">{{ reservation.college }}</dd>
                   </div>
-                  <div>
+                  <div class="min-w-0">
                     <dt class="text-helper text-muted">Ponto de embarque</dt>
                     <dd class="text-helper">{{ reservation.boardingPoint }}</dd>
                   </div>

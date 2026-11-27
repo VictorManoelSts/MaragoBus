@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve as resolvePath } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory } from 'vue-router'
@@ -78,11 +80,19 @@ describe.each(variants)('Navegação do aluno: %s', variant => {
 describe('Integração das páginas do aluno', () => {
   afterEach(() => vi.useRealTimers())
 
+  it('remove a largura mínima do body somente no layout do aluno', async () => {
+    const { wrapper } = await application()
+    const styles = readFileSync(resolvePath('apps/portal/src/styles.css'), 'utf8')
+    expect(wrapper.findComponent(PortalLayout).classes()).toContain('student-layout')
+    expect(styles).toContain('html:has(.student-layout) body { min-width: 0; }')
+  })
+
   it.each(destinations)('renderiza $path com o layout e título corretos', async ({ path, title }) => {
     vi.setSystemTime(new Date('2026-11-16T14:00:00Z'))
     const { wrapper } = await application(path)
     expect(wrapper.findComponent(StudentLayout).exists()).toBe(true)
     expect(wrapper.findComponent(PortalLayout).exists()).toBe(true)
+    expect(wrapper.findComponent(PortalLayout).classes()).toContain('student-layout')
     expect(wrapper.findAll('main')).toHaveLength(1)
     expect(wrapper.findAll('h1')).toHaveLength(1)
     expect(wrapper.get('main h1').text()).toBe(title)
@@ -190,9 +200,14 @@ describe('Integração das páginas do aluno', () => {
     }
   })
 
-  it('mantém os quatro rótulos mobile em uma linha', async () => {
+  it('distribui os quatro rótulos mobile sem forçar largura além das colunas', async () => {
     const { wrapper } = await navigation('mobile')
-    for (const link of wrapper.findAll('a')) expect(link.get('span').classes()).toContain('whitespace-nowrap')
+    expect(wrapper.get('ul').element.style.gridTemplateColumns).toMatch(/^repeat\(4, minmax\(0(?:px)?, 1fr\)\)$/)
+    for (const link of wrapper.findAll('a')) {
+      expect(link.classes()).toContain('min-w-0')
+      expect(link.get('span').classes()).toEqual(expect.arrayContaining(['min-w-0', 'max-w-full', 'wrap-anywhere']))
+      expect(link.get('span').classes()).not.toContain('whitespace-nowrap')
+    }
     for (const item of wrapper.findAll('li')) expect(item.classes()).toContain('min-w-0')
 
   })

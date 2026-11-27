@@ -17,7 +17,7 @@ async function logout() {
 </script>
 
 <template>
-  <PortalLayout>
+  <PortalLayout class="student-layout @container">
     <template #header-actions>
       <div class="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
         <BaseButton variant="outline" size="sm" @click="logout">Sair</BaseButton>

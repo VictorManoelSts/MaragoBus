@@ -137,6 +137,7 @@ describe('Navegação do motorista', () => {
     expect(mobile!.get('ul').element.style.gridTemplateColumns).toMatch(/^repeat\(3, minmax\(0(?:px)?, 1fr\)\)$/)
     expect(mobile!.classes()).toContain('portal-navigation--mobile')
     expect(mobile!.get('a').classes()).toContain('min-h-16')
+    expect(mobile!.get('a').classes()).not.toContain('min-w-0')
     expect(wrapper.get('main').element.parentElement!.nextElementSibling).toBe(mobile!.element.parentElement)
   })
 

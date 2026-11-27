@@ -61,6 +61,8 @@ describe('Reservas na página inicial', () => {
     expect(form.get('time[datetime="2026-11-16T14:00:00.000Z"]').text()).toBe('11:00')
     expect(wrapper.findComponent(BaseSelect).exists()).toBe(true)
     expect(form.get('label').attributes('for')).toBe(form.get('select').attributes('id'))
+    expect(form.attributes('aria-labelledby')).toBe(form.get('h2').attributes('id'))
+    expect(form.get('select').element.required).toBe(true)
     expect(form.get('#' + form.get('select').attributes('aria-describedby')).text()).toContain('apenas para esta reserva')
     expect(form.findAll('option').slice(1).map(option => option.text())).toEqual(context().boardingPoints.map(point => point.name))
     expect(form.get('button').attributes('disabled')).toBeDefined()
@@ -184,6 +186,20 @@ describe('Reservas na página inicial', () => {
     expect(useReservationsStore().studentReservations).toHaveLength(0)
     expect(wrapper.text()).toContain('A disponibilidade mudou')
     expect(wrapper.find('form').exists()).toBe(false)
+    expect(document.activeElement).toBe(wrapper.get('[aria-labelledby="reservation-availability-notice"]').element)
+  })
+
+  it('recupera o foco quando o horário encerra o formulário em uso', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+    const { wrapper } = await page()
+    wrapper.get('select').element.focus()
+    vi.advanceTimersByTime(60_000)
+    await nextTick()
+    await nextTick()
+    expect(wrapper.find('form').exists()).toBe(false)
+    expect(document.activeElement).toBe(wrapper.get('[aria-label="Reservas fechadas"]').element)
+    wrapper.unmount()
   })
 
   it('confirma uma única vez no cartão atual sem alterar perfil, sessão, armazenamento ou rede', async () => {

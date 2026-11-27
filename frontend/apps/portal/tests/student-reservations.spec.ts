@@ -44,12 +44,13 @@ describe('Minhas reservas', () => {
 
   it('mostra o estado vazio, explica a demonstração e oferece acesso a Fazer reserva', async () => {
     const { router, wrapper } = await page()
+    expect(wrapper.get('main .sr-only[role="status"]').text()).toBe('Filtro Todas. 0 reservas encontradas.')
     expect(wrapper.get('main').text()).toContain('até recarregar')
     expect(wrapper.get('main').text()).toContain('Você ainda não tem reservas.')
     await wrapper.get('input[value="confirmed"]').setValue()
-    expect(wrapper.get('main [role="status"]').text()).toBe('Você não tem reservas confirmadas.')
+    expect(wrapper.get('main .mb-card p').text()).toBe('Você não tem reservas confirmadas.')
     await wrapper.get('input[value="cancelled"]').setValue()
-    expect(wrapper.get('main [role="status"]').text()).toBe('Você não tem reservas canceladas.')
+    expect(wrapper.get('main .mb-card p').text()).toBe('Você não tem reservas canceladas.')
     await wrapper.get('input[value="all"]').setValue()
     await wrapper.get('main a').trigger('click')
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/'))
@@ -67,6 +68,7 @@ describe('Minhas reservas', () => {
     expect(wrapper.get('main time').text()).toBe('17/11/2026')
     expect(wrapper.get('main li').text()).toContain('Faculdade de teste')
     expect(wrapper.get('main li').text()).toContain('Praça de exemplo — Centro')
+    expect(wrapper.get('main li > .mb-card > .mb-card__body > div').classes()).toContain('wrap-anywhere')
     expect(wrapper.findAll('main li').every(item => item.text().includes('Confirmada'))).toBe(true)
     expect(useReservationsStore().studentReservations.map(item => item.travelDate)).toEqual(dates)
     vi.setSystemTime(new Date('2026-11-18T03:00:00Z'))
@@ -91,14 +93,17 @@ describe('Minhas reservas', () => {
     expect(document.activeElement).toBe(radios[0]!.element)
     expect(wrapper.find('main select').exists()).toBe(false)
     expect(wrapper.findAll('main li')).toHaveLength(2)
+    expect(wrapper.get('main .sr-only[role="status"]').text()).toBe('Filtro Todas. 2 reservas encontradas.')
 
     await group.get('input[value="confirmed"]').setValue()
     expect(radios.map(radio => radio.element.checked)).toEqual([false, true, false])
+    expect(wrapper.get('main .sr-only[role="status"]').text()).toBe('Filtro Confirmadas. 1 reserva encontrada.')
     expect(wrapper.get('main li .mb-feedback--success').text()).toBe('Confirmada')
     expect(wrapper.findAll('main li')).toHaveLength(1)
 
     await group.get('input[value="cancelled"]').setValue()
     expect(radios.map(radio => radio.element.checked)).toEqual([false, false, true])
+    expect(wrapper.get('main .sr-only[role="status"]').text()).toBe('Filtro Canceladas. 1 reserva encontrada.')
     expect(wrapper.get('main li .mb-feedback--danger').text()).toBe('Cancelada')
     expect(wrapper.findAll('main li')).toHaveLength(1)
 

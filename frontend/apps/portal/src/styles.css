@@ -3,6 +3,7 @@
 @source "../../../packages/shared/src";
 
 @layer components {
+  html:has(.student-layout) body { min-width: 0; }
   html { scroll-padding-bottom: var(--portal-mobile-scroll-inset, 0px); }
   .portal-layout {
     padding-top: env(safe-area-inset-top, 0px);

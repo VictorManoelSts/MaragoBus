@@ -24,6 +24,8 @@ describe('Perfil do aluno', () => {
 
   it('exibe somente dados disponíveis e mantém os campos cadastrais em leitura', async () => {
     const { wrapper } = await page()
+    expect(wrapper.get('main > div').classes()).toContain('min-w-0')
+    expect(wrapper.get('main > div').classes()).toContain('wrap-anywhere')
     expect(wrapper.findAll('main dt').map(field => field.text())).toEqual([
       'Nome completo', 'CPF', 'Faculdade', 'Curso', 'Modalidade de ensino',
     ])
@@ -41,6 +43,9 @@ describe('Perfil do aluno', () => {
     expect(personal?.findAll('select, button').map(control => control.element.tagName)).toEqual([
       'SELECT', 'BUTTON', 'BUTTON',
     ])
+    expect(personal?.findAll('button').every(button => button.classes().includes('w-full'))).toBe(true)
+    expect(wrapper.get('main [role="status"]').attributes('aria-live')).toBe('polite')
+    expect(wrapper.get('main [role="status"]').attributes('aria-atomic')).toBe('true')
   })
 
   it('valida contatos, associa os erros aos campos e foca o primeiro inválido', async () => {
@@ -72,9 +77,11 @@ describe('Perfil do aluno', () => {
     await email.setValue('aluno@example.com')
     await phone.setValue('(82) 91234-5678')
     await wrapper.get('main select').setValue('demo-north')
+    wrapper.get<HTMLButtonElement>('main button[type="submit"]').element.focus()
     await wrapper.get('main form').trigger('submit')
     await flushPromises()
     expect(wrapper.get('main [role="status"]').text()).toBe('Alterações salvas.')
+    expect(document.activeElement).toBe(email.element)
     await useSessionStore().restore()
     expect(store.preferences).toEqual({
       email: 'aluno@example.com', phone: '(82) 91234-5678', boardingPointId: 'demo-north',
@@ -82,11 +89,15 @@ describe('Perfil do aluno', () => {
     await email.setValue('rascunho')
     await phone.setValue('123')
     await wrapper.get('main select').setValue('demo-south')
-    await wrapper.get('main form button[type="button"]').trigger('click')
+    const discard = wrapper.get<HTMLButtonElement>('main form button[type="button"]')
+    discard.element.focus()
+    await discard.trigger('click')
+    await flushPromises()
     expect((email.element as HTMLInputElement).value).toBe('aluno@example.com')
     expect((phone.element as HTMLInputElement).value).toBe('(82) 91234-5678')
     expect((wrapper.get('main select').element as HTMLSelectElement).value).toBe('demo-north')
     expect(wrapper.get('main [role="status"]').text()).toBe('Alterações descartadas.')
+    expect(document.activeElement).toBe(email.element)
   })
 
   it('usa a preferência nas novas reservas e preserva a escolha específica e a reserva confirmada', async () => {
