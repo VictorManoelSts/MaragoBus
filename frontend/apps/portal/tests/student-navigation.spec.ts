@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory } from 'vue-router'
 import { BaseCard } from '@maragobus/shared'
+import { authNavigation } from '@maragobus/shared/auth/navigation'
+import { useSessionStore } from '@maragobus/shared/auth/session'
 import App from '../src/App.vue'
 import StudentNavigation from '../src/components/StudentNavigation.vue'
 import StudentLayout from '../src/layouts/StudentLayout.vue'
@@ -88,13 +90,14 @@ describe('Integração das páginas do aluno', () => {
     expect(wrapper.findAllComponents(StudentNavigation)).toHaveLength(2)
     const card = wrapper.findComponent(BaseCard)
     if (path === '/reservas') expect(card.text()).toContain('Você ainda não tem reservas.')
-    else if (path === '/perfil') expect(card.text()).toContain('Dados do aluno')
+    else if (path === '/perfil') expect(card.text()).toContain('Dados pessoais')
     else if (path === '/comprovante') expect(wrapper.get('main p').text()).toContain('Você não tem reservas para hoje')
     else expect(wrapper.get('main').text()).toContain('Reservas fechadas')
     expect(wrapper.get('main p').text().length).toBeGreaterThan(20)
-    expect(wrapper.get('main').findAll('input, select, form')).toHaveLength(path === '/perfil' ? 2 : path === '/reservas' ? 3 : 0)
+    expect(wrapper.get('main').findAll('input, select, form')).toHaveLength(path === '/perfil' ? 4 : path === '/reservas' ? 3 : 0)
     const buttons = wrapper.get('main').findAll('button').map(button => button.text())
-    expect(buttons).toEqual(path === '/perfil' ? ['Salvar ponto padrão', 'Sair'] : [])
+    expect(buttons).toEqual(path === '/perfil' ? ['Salvar alterações', 'Descartar alterações'] : [])
+    expect(wrapper.findAll('header button').filter(button => button.text() === 'Sair')).toHaveLength(1)
   })
 
   it('abre os avisos pelo sino e mantém a página atual ativa', async () => {
@@ -167,12 +170,24 @@ describe('Integração das páginas do aluno', () => {
     expect(wrapper.get('main a').attributes('href')).toBe('/')
   })
 
-  it('exibe dados do aluno e preserva a saída no perfil', async () => {
+  it('exibe o perfil sem identificação de teste e encerra a sessão pelo cabeçalho', async () => {
     const { wrapper } = await application('/perfil')
     expect(wrapper.get('main h1').text()).toBe('Meu perfil')
-    expect(wrapper.get('main p').text()).toContain('ponto de embarque padrão')
+    const point = wrapper.get('main select')
+    expect(wrapper.get('label[for="' + point.attributes('id') + '"]').text()).toBe('Ponto de embarque padrão')
     expect(wrapper.findComponent(BaseCard).text()).toContain('Aluno de Teste')
-    expect(wrapper.findAll('main button').some(button => button.text() === 'Sair')).toBe(true)
+    expect(wrapper.get('main').text()).not.toContain('Sessão de teste')
+    const logout = wrapper.findAll('button').filter(button => button.text() === 'Sair')
+    expect(logout).toHaveLength(1)
+    expect(logout[0]?.element.closest('header')).toBe(wrapper.get('header').element)
+    const redirect = vi.spyOn(authNavigation, 'openExternal').mockImplementation(() => {})
+    try {
+      await logout[0]?.trigger('click')
+      expect(useSessionStore().authenticated).toBe(false)
+      expect(redirect).toHaveBeenCalledWith('http://localhost:5173/login')
+    } finally {
+      redirect.mockRestore()
+    }
   })
 
   it('mantém os quatro rótulos mobile em uma linha', async () => {

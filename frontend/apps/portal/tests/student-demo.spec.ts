@@ -43,9 +43,11 @@ it('ativa pela rota e preenche o perfil, o histórico e os avisos do aluno auten
   await router.push('/perfil')
   const profile = mount(StudentProfilePage, { global: { plugins: [router] } })
   expect(profile.findAll('dd').map(item => item.text())).toEqual([
-    'Aluno de Teste', '900.000.001-75', 'aluno.demo@example.invalid',
-    'Faculdade de Demonstração', 'Sistemas de Informação', 'Praça de exemplo — Centro',
+    'Aluno de Teste', '900.000.001-75',
+    'Faculdade de Demonstração', 'Sistemas de Informação', 'Presencial',
   ])
+  expect(profile.get<HTMLInputElement>('input[type="email"]').element.value).toBe('aluno.demo@example.invalid')
+  expect(profile.get<HTMLSelectElement>('select').element.value).toBe('demo-center')
   profile.unmount()
 
   const demo = useStudentDemoStore()
@@ -125,7 +127,9 @@ it('preserva a sessão e os registros comuns e reativa o aluno sem os dados alte
   }
   expect(store.confirm(request).status).toBe('confirmed')
   const regular = store.findReservation(monday)!
-  expect(profile.saveDefaultPoint('demo-north')).toBe(true)
+  expect(profile.savePreferences({
+    email: 'comum@example.invalid', phone: '(82) 91234-5678', boardingPointId: 'demo-north',
+  })).toBe(true)
   notices.markAllAsRead()
   expect(notices.unreadCount).toBe(0)
 
@@ -134,7 +138,11 @@ it('preserva a sessão e os registros comuns e reativa o aluno sem os dados alte
   await session.login(credentials)
   expect(store.studentReservations.some(item => item.id === regular.id)).toBe(false)
   expect(store.confirm(request).status).toBe('confirmed')
-  expect(profile.saveDefaultPoint('demo-south')).toBe(true)
+  expect(profile.preferences.email).toBe('aluno.demo@example.invalid')
+  expect(profile.preferences.phone).toBe('')
+  expect(profile.savePreferences({
+    email: 'demo-editado@example.invalid', phone: '82987654321', boardingPointId: 'demo-south',
+  })).toBe(true)
   notices.markAllAsRead()
   expect(notices.unreadCount).toBe(0)
 
@@ -151,6 +159,8 @@ it('preserva a sessão e os registros comuns e reativa o aluno sem os dados alte
   expect(session.authenticated).toBe(true)
   expect(store.studentReservations.map(item => item.id)).toEqual([regular.id])
   expect(profile.reservationContext.defaultBoardingPointId).toBe('demo-north')
+  expect(profile.preferences.email).toBe('comum@example.invalid')
+  expect(profile.preferences.phone).toBe('(82) 91234-5678')
   expect(notices.unreadCount).toBe(0)
   expect(profile.registration).toBeUndefined()
 
@@ -158,6 +168,8 @@ it('preserva a sessão e os registros comuns e reativa o aluno sem os dados alte
   await session.login(credentials)
   expect(store.findReservation(monday)).toBeUndefined()
   expect(profile.reservationContext.defaultBoardingPointId).toBe('demo-center')
+  expect(profile.preferences.email).toBe('aluno.demo@example.invalid')
+  expect(profile.preferences.phone).toBe('')
   expect(notices.unreadCount).toBe(1)
 })
 

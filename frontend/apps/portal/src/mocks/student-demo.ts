@@ -15,6 +15,13 @@ const scenarios = {
 
 export const demoStudentId = 'mock-student-test'
 
+type StudentDemoProfile = {
+  cpf: string
+  email: string
+  course: string
+  educationModality: string
+}
+
 export function resolveStudentDemoSelection(value: unknown): keyof typeof scenarios {
   return typeof value === 'string' && Object.hasOwn(scenarios, value)
     ? value as keyof typeof scenarios : 'completo'
@@ -65,9 +72,15 @@ export function createStudentDemo(selection: string, reference = new Date()) {
   if (scenario.current) reservations.push(reservation(today, scenario.current))
   if (scenario.future) reservations.push(reservation(nextRegularTravelDay(today), 'confirmed'))
 
+  const profile: StudentDemoProfile = {
+    cpf: '900.000.001-75',
+    email: 'aluno.demo@example.invalid',
+    course: 'Sistemas de Informação',
+    educationModality: 'Presencial',
+  }
   return {
     now, closures, reservations,
-    profile: { cpf: '900.000.001-75', email: 'aluno.demo@example.invalid', course: 'Sistemas de Informação' },
+    profile,
     defaultBoardingPointId: point.id,
     readNoticeIds: getDemonstrationNotices(demoStudentId).slice(0, 1).map(notice => notice.id),
   }

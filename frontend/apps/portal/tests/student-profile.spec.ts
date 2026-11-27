@@ -12,7 +12,7 @@ async function page() {
   const router = createPortalRouter(createMemoryHistory())
   await router.push('/perfil')
   await router.isReady()
-  return { router, wrapper: mount(App, { global: { plugins: [router] } }) }
+  return { router, wrapper: mount(App, { attachTo: document.body, global: { plugins: [router] } }) }
 }
 
 describe('Perfil do aluno', () => {
@@ -25,27 +25,68 @@ describe('Perfil do aluno', () => {
   it('exibe somente dados disponíveis e mantém os campos cadastrais em leitura', async () => {
     const { wrapper } = await page()
     expect(wrapper.findAll('main dt').map(field => field.text())).toEqual([
-      'Nome', 'CPF', 'E-mail', 'Faculdade', 'Curso', 'Ponto de embarque padrão',
+      'Nome completo', 'CPF', 'Faculdade', 'Curso', 'Modalidade de ensino',
     ])
     expect(wrapper.findAll('main dd').map(field => field.text())).toEqual([
-      'Aluno de Teste', 'Não informado', 'Não informado', 'Faculdade de Demonstração', 'Não informado', 'Não informado',
+      'Aluno de Teste', 'Não informado', 'Faculdade de Demonstração', 'Não informado', 'Não informado',
     ])
-    expect(wrapper.findAll('main input, main textarea')).toHaveLength(0)
+    expect(wrapper.findAll('main h2').map(heading => heading.text())).toEqual([
+      'Dados pessoais', 'Dados acadêmicos', 'Segurança',
+    ])
+    expect(wrapper.findAll('main input, main textarea')).toHaveLength(2)
     expect(wrapper.findAll('main select')).toHaveLength(1)
+    const [personal, , security] = wrapper.findAll('main .mb-card')
+    expect(security?.text()).toContain('autenticação real')
+    expect(security?.find('button').exists()).toBe(false)
+    expect(personal?.findAll('select, button').map(control => control.element.tagName)).toEqual([
+      'SELECT', 'BUTTON', 'BUTTON',
+    ])
   })
 
-  it('orienta ao salvar sem ponto e atualiza o perfil quando a seleção é válida', async () => {
+  it('valida contatos, associa os erros aos campos e foca o primeiro inválido', async () => {
     const { wrapper } = await page()
     const store = useStudentProfileStore()
-    await wrapper.get('main form').trigger('submit')
-    expect(wrapper.get('main [role="alert"]').text()).toContain('Selecione um ponto de embarque válido.')
-    expect(store.saveDefaultPoint('ponto-inexistente')).toBe(false)
+    const email = wrapper.get('main input[type="email"]')
+    const phone = wrapper.get('main input[type="tel"]')
+    await email.setValue('email inválido')
+    await phone.setValue('1234')
     await wrapper.get('main select').setValue('demo-north')
     await wrapper.get('main form').trigger('submit')
-    expect(wrapper.get('main [role="status"]').text()).toContain('Ponto de embarque padrão atualizado.')
-    expect(wrapper.findAll('main dd').at(-1)?.text()).toBe('Parada de exemplo — Bairro Norte')
+    await flushPromises()
+    expect(document.activeElement).toBe(email.element)
+    for (const [field, label] of [[email, 'E-mail'], [phone, 'Telefone']] as const) {
+      expect(wrapper.get('label[for="' + field.attributes('id') + '"]').text()).toBe(label)
+      expect(field.attributes('aria-invalid')).toBe('true')
+      expect(wrapper.get('#' + field.attributes('aria-describedby')).attributes('role')).toBe('alert')
+    }
+    expect(store.preferences).toEqual({ email: '', phone: '', boardingPointId: '' })
+    expect(store.savePreferences({ email: 'aluno@example.com', phone: '', boardingPointId: 'ponto-inexistente' })).toBe(false)
+    expect(store.saveDefaultPoint('ponto-inexistente')).toBe(false)
+  })
+
+  it('salva contatos e ponto válidos e descarta alterações posteriores', async () => {
+    const { wrapper } = await page()
+    const store = useStudentProfileStore()
+    const email = wrapper.get('main input[type="email"]')
+    const phone = wrapper.get('main input[type="tel"]')
+    await email.setValue('aluno@example.com')
+    await phone.setValue('(82) 91234-5678')
+    await wrapper.get('main select').setValue('demo-north')
+    await wrapper.get('main form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.get('main [role="status"]').text()).toBe('Alterações salvas.')
     await useSessionStore().restore()
-    expect(store.reservationContext.defaultBoardingPointId).toBe('demo-north')
+    expect(store.preferences).toEqual({
+      email: 'aluno@example.com', phone: '(82) 91234-5678', boardingPointId: 'demo-north',
+    })
+    await email.setValue('rascunho')
+    await phone.setValue('123')
+    await wrapper.get('main select').setValue('demo-south')
+    await wrapper.get('main form button[type="button"]').trigger('click')
+    expect((email.element as HTMLInputElement).value).toBe('aluno@example.com')
+    expect((phone.element as HTMLInputElement).value).toBe('(82) 91234-5678')
+    expect((wrapper.get('main select').element as HTMLSelectElement).value).toBe('demo-north')
+    expect(wrapper.get('main [role="status"]').text()).toBe('Alterações descartadas.')
   })
 
   it('usa a preferência nas novas reservas e preserva a escolha específica e a reserva confirmada', async () => {
@@ -72,9 +113,24 @@ describe('Perfil do aluno', () => {
     expect(reservations.studentReservations[0]?.boardingPoint).toBe('Parada de exemplo — Bairro Sul')
   })
 
+  it('permite atualizar contatos mesmo sem um ponto padrão cadastrado', async () => {
+    const { wrapper } = await page()
+    const email = wrapper.get('main input[type="email"]')
+    await email.setValue('aluno@example.com')
+    await wrapper.get('main form').trigger('submit')
+    expect(useStudentProfileStore().preferences).toEqual({
+      email: 'aluno@example.com', phone: '', boardingPointId: '',
+    })
+    await email.setValue('')
+    await wrapper.get('main form').trigger('submit')
+    expect(useStudentProfileStore().preferences.email).toBe('')
+  })
+
   it('isola a preferência e os dados de demonstração ao trocar de aluno ou sair', async () => {
     const { wrapper } = await page()
     const store = useStudentProfileStore()
+    await wrapper.get('main input[type="email"]').setValue('aluno@example.com')
+    await wrapper.get('main input[type="tel"]').setValue('82912345678')
     await wrapper.get('main select').setValue('demo-north')
     await wrapper.get('main form').trigger('submit')
     const session = useSessionStore()
@@ -83,11 +139,14 @@ describe('Perfil do aluno', () => {
     expect(wrapper.get('main dd').text()).toBe('Outro aluno')
     expect(wrapper.get('main').text()).not.toContain('Faculdade de Demonstração')
     expect((wrapper.get('main select').element as HTMLSelectElement).value).toBe('')
-    expect(wrapper.find('main [role="status"]').exists()).toBe(false)
+    expect(wrapper.get('main [role="status"]').text()).toBe('')
+    expect(store.preferences).toEqual({ email: '', phone: '', boardingPointId: '' })
     expect(store.saveDefaultPoint('demo-center')).toBe(true)
     session.logout()
     expect(store.saveDefaultPoint('demo-north')).toBe(false)
+    expect(store.savePreferences({ email: 'outro@example.com', phone: '', boardingPointId: '' })).toBe(false)
     await setMockSession('student')
     expect(store.reservationContext.defaultBoardingPointId).toBeNull()
+    expect(store.preferences.email).toBe('')
   })
 })
