@@ -44,7 +44,10 @@ function show(event: MouseEvent) {
   document.documentElement.style.overflow = 'hidden'
   open.value = true
   dialog.value.querySelector<HTMLButtonElement>('[data-menu-close]')?.focus()
-  dialog.value.querySelector<HTMLAnchorElement>('a[aria-current="page"]')?.scrollIntoView?.({ block: 'nearest' })
+  const activeLink = dialog.value.querySelector<HTMLAnchorElement>('a[aria-current="page"]')
+  const activeGroup = activeLink?.closest('details')
+  if (activeGroup) activeGroup.open = true
+  activeLink?.scrollIntoView?.({ block: 'nearest' })
 }
 function outside(event: MouseEvent | PointerEvent) {
   if (event.target !== dialog.value || !dialog.value) return false
@@ -57,8 +60,8 @@ function backdrop(event: MouseEvent) {
 }
 function trapTab(event: KeyboardEvent) {
   if (event.key !== 'Tab' || !open.value || !dialog.value) return
-  const controls = [...dialog.value.querySelectorAll<HTMLElement>('button:not(:disabled), a[href]')]
-    .filter(element => element.tabIndex >= 0)
+  const controls = [...dialog.value.querySelectorAll<HTMLElement>('button:not(:disabled), summary, a[href]')]
+    .filter(element => element.localName === 'summary' || (element.tabIndex >= 0 && !element.closest('details:not([open])')))
   const first = controls[0]
   const last = controls.at(-1)
   if (!first || !last) return
@@ -113,7 +116,7 @@ onBeforeUnmount(() => {
         </BaseButton>
       </div>
       <nav aria-label="Navegação administrativa" class="admin-drawer__navigation min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <AdminNavigationLinks @select="close('navigate')" />
+        <AdminNavigationLinks collapsible @select="close('navigate')" />
       </nav>
     </dialog>
   </Teleport>

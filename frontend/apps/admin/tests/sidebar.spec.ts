@@ -9,18 +9,7 @@ import AdminShell from '../src/layouts/AdminShell.vue'
 import { createAdminRouter } from '../src/router'
 import { setMockSession } from '../../../packages/shared/tests/auth-fixture'
 
-const destinations = [
-  { path: '/', label: 'Visão geral', title: 'Painel administrativo' },
-  { path: '/alunos', label: 'Alunos', title: 'Alunos' },
-  { path: '/motoristas', label: 'Motoristas', title: 'Motoristas' },
-  { path: '/faculdades', label: 'Faculdades', title: 'Faculdades' },
-  { path: '/pontos-embarque', label: 'Pontos de embarque', title: 'Pontos de embarque' },
-  { path: '/advertencias', label: 'Solicitações de advertência', title: 'Solicitações de advertência' },
-  { path: '/perfil', label: 'Meu perfil', title: 'Meu perfil' },
-  { path: '/cursos', label: 'Cursos', title: 'Cursos' },
-  { path: '/cursos-ofertados', label: 'Cursos ofertados', title: 'Cursos ofertados' },
-  { path: '/reservas', label: 'Reservas', title: 'Reservas' },
-]
+import { destinations, groups, groupSizes } from './navigation-fixture'
 
 async function application(path = '/') {
   await setMockSession('admin')
@@ -33,20 +22,20 @@ async function application(path = '/') {
 }
 
 describe('Sidebar administrativa desktop', () => {
-  it('renderiza os dez destinos em uma navegação semântica com ícones e rótulos', async () => {
+  it('renderiza os treze destinos em uma navegação semântica com ícones e rótulos', async () => {
     const { wrapper } = await application()
     const nav = wrapper.findComponent(AdminSidebar)
     expect(nav.element.tagName).toBe('NAV')
     expect(nav.attributes('aria-label')).toBe('Navegação administrativa')
-    expect(nav.findAll('li')).toHaveLength(10)
+    expect(nav.findAll('li')).toHaveLength(13)
     expect(nav.findAll('a').map(link => ({ path: link.attributes('href'), label: link.text() })))
       .toEqual(destinations.map(({ path, label }) => ({ path, label })))
-    expect(nav.findAll('svg')).toHaveLength(10)
-    const groups = nav.findAll('section')
-    expect(groups.map(group => group.get('h3').text())).toEqual(['Principal', 'Gerenciamento complementar'])
-    expect(groups.map(group => group.findAll('a').length)).toEqual([7, 3])
-    for (const group of groups) {
-      expect(group.attributes('aria-labelledby')).toBe(group.get('h3').attributes('id'))
+    expect(nav.findAll('svg')).toHaveLength(13)
+    const sections = nav.findAll('section')
+    expect(sections.map(group => group.get('h2').text())).toEqual(groups)
+    expect(sections.map(group => group.findAll('a').length)).toEqual(groupSizes)
+    for (const group of sections) {
+      expect(group.attributes('aria-labelledby')).toBe(group.get('h2').attributes('id'))
     }
     for (const link of nav.findAll('a')) {
       expect(link.get('svg').attributes('aria-hidden')).toBe('true')
@@ -64,32 +53,37 @@ describe('Sidebar administrativa desktop', () => {
     if (path !== '/') expect(nav.get('a[href="/"]').attributes('aria-current')).toBeUndefined()
   })
 
-  it.each(destinations)('abre $path diretamente e renderiza apenas o conteúdo provisório', async ({ path, title }) => {
+  it.each(destinations)('abre $path diretamente no layout administrativo', async ({ path, title }) => {
     const { wrapper } = await application(path)
     expect(wrapper.findComponent(AdminShell).exists()).toBe(true)
     expect(wrapper.findComponent(AdminLayout).exists()).toBe(true)
     expect(wrapper.findComponent(AdminSidebar).exists()).toBe(true)
     expect(wrapper.findAll('main')).toHaveLength(1)
     expect(wrapper.findAll('h1')).toHaveLength(1)
-    expect(wrapper.get('main h1').text()).toBe(title)
+    expect(wrapper.get('header h1').text()).toBe(title)
     expect(wrapper.get('main p').text().length).toBeGreaterThan(20)
+    expect(wrapper.get('header img').attributes('src')).toContain('logo-horizontal.svg')
+    if (path === '/faculdades') {
+      expect(wrapper.get('main').text()).toContain('Nova faculdade')
+      expect(wrapper.get('main').text()).toContain('Dados fictícios')
+      return
+    }
     expect(wrapper.findAllComponents(BaseCard)).toHaveLength(1)
     expect(wrapper.findComponent(BaseCard).text()).toBe(path === '/'
       ? 'As funcionalidades administrativas serão implementadas posteriormente.'
       : 'Esta funcionalidade administrativa será desenvolvida posteriormente.')
     expect(wrapper.get('main').findAll('table, form, input, canvas')).toHaveLength(0)
     expect(wrapper.get('main').findAll('button').map(button => button.text())).toEqual(path === '/perfil' ? ['Sair'] : [])
-    expect(wrapper.get('header img').attributes('src')).toContain('logo-horizontal.svg')
   })
 
-  it('navega pelos dez destinos usando RouterLink sem duplicar o layout', async () => {
+  it('navega pelos treze destinos usando RouterLink sem duplicar o layout', async () => {
     const { wrapper, router } = await application('/perfil')
     const sidebar = wrapper.findComponent(AdminSidebar)
     for (const { path, title } of destinations) {
       await sidebar.get('a[href="' + path + '"]').trigger('click')
       await flushPromises()
       expect(router.currentRoute.value.path).toBe(path)
-      expect(wrapper.get('main h1').text()).toBe(title)
+      expect(wrapper.get('header h1').text()).toBe(title)
       expect(wrapper.findAll('header')).toHaveLength(1)
       expect(wrapper.findAll('main')).toHaveLength(1)
     }
@@ -122,7 +116,7 @@ describe('Sidebar administrativa desktop', () => {
     expect(wrapper.findComponent(AdminLayout).exists()).toBe(false)
     await router.push('/')
     await flushPromises()
-    expect(wrapper.get('main h1').text()).toBe('Painel administrativo')
-    expect(wrapper.findComponent(AdminSidebar).get('a[aria-current="page"]').text()).toBe('Visão geral')
+    expect(wrapper.get('header h1').text()).toBe('Painel administrativo')
+    expect(wrapper.findComponent(AdminSidebar).get('a[aria-current="page"]').text()).toBe('Painel')
   })
 })

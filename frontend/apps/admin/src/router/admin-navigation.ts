@@ -1,6 +1,6 @@
 import {
-  BookOpen, BookOpenCheck, CalendarDays, GraduationCap, LayoutDashboard,
-  MapPin, MessageSquareWarning, University, UserRound, UsersRound,
+  Ban, BookOpen, BookOpenCheck, CalendarDays, CalendarOff, GraduationCap,
+  LayoutDashboard, MapPin, Megaphone, MessageSquareWarning, University, UserRound, UsersRound,
 } from '@lucide/vue'
 import type { Component } from 'vue'
 
@@ -8,6 +8,7 @@ interface AdminNavigationItem {
   name: string
   path: string
   label: string
+  title?: string
   icon: Component
   description?: string
 }
@@ -20,44 +21,47 @@ interface AdminNavigationGroup {
 
 // Fonte única dos grupos desktop/mobile e do registro de rotas.
 export const adminNavigationGroups: readonly AdminNavigationGroup[] = [
-  { name: 'main', label: 'Principal', items: [
-  { name: 'home', path: '/', label: 'Visão geral', icon: LayoutDashboard },
   {
-    name: 'students', path: '/alunos', label: 'Alunos', icon: GraduationCap,
-    description: 'Espaço para o gerenciamento dos alunos do transporte universitário.',
+    name: 'overview', label: 'Visão geral', items: [
+      { name: 'home', path: '/', label: 'Painel', title: 'Painel administrativo', icon: LayoutDashboard },
+    ],
   },
   {
-    name: 'drivers', path: '/motoristas', label: 'Motoristas', icon: UsersRound,
-    description: 'Espaço para o gerenciamento dos motoristas do transporte universitário.',
+    name: 'people', label: 'Pessoas', items: [
+      { name: 'students', path: '/alunos', label: 'Alunos', icon: GraduationCap, description: 'Gestão dos alunos do transporte universitário.' },
+      { name: 'drivers', path: '/motoristas', label: 'Motoristas', icon: UsersRound, description: 'Gestão dos motoristas do transporte universitário.' },
+    ],
   },
   {
-    name: 'colleges', path: '/faculdades', label: 'Faculdades', icon: University,
-    description: 'Espaço para o gerenciamento das faculdades atendidas pelo transporte universitário.',
+    name: 'academic', label: 'Acadêmico', items: [
+      { name: 'colleges', path: '/faculdades', label: 'Faculdades', icon: University, description: 'Gestão das faculdades atendidas pelo transporte universitário.' },
+      { name: 'courses', path: '/cursos', label: 'Cursos', icon: BookOpen, description: 'Gestão dos cursos cadastrados no sistema.' },
+      { name: 'offered-courses', path: '/cursos-ofertados', label: 'Cursos ofertados', icon: BookOpenCheck, description: 'Gestão dos cursos ofertados pelas faculdades.' },
+    ],
   },
   {
-    name: 'boarding-points', path: '/pontos-embarque', label: 'Pontos de embarque', icon: MapPin,
-    description: 'Espaço para o gerenciamento dos pontos de embarque do transporte universitário.',
-  },
-  { name: 'warnings', path: '/advertencias', label: 'Solicitações de advertência', icon: MessageSquareWarning, description: 'Espaço para a consulta administrativa das solicitações de advertência.' },
-  {
-    name: 'profile', path: '/perfil', label: 'Meu perfil', icon: UserRound,
-    description: 'Espaço para consultar as informações do perfil administrativo.',
-  },
-  ] },
-  { name: 'complementary', label: 'Gerenciamento complementar', items: [
-  {
-    name: 'courses', path: '/cursos', label: 'Cursos', icon: BookOpen,
-    description: 'Espaço para o gerenciamento dos cursos cadastrados no sistema.',
+    name: 'transport', label: 'Transporte', items: [
+      { name: 'boarding-points', path: '/pontos-embarque', label: 'Pontos de embarque', icon: MapPin, description: 'Gestão dos pontos de embarque do transporte universitário.' },
+      { name: 'reservations', path: '/reservas', label: 'Reservas', icon: CalendarDays, description: 'Consulta administrativa das reservas de transporte universitário.' },
+      { name: 'transport-closures', path: '/datas-sem-transporte', label: 'Datas sem transporte', icon: CalendarOff, description: 'Gestão do calendário de interrupções do transporte universitário.' },
+    ],
   },
   {
-    name: 'offered-courses', path: '/cursos-ofertados', label: 'Cursos ofertados', icon: BookOpenCheck,
-    description: 'Espaço para o gerenciamento dos cursos ofertados pelas faculdades.',
+    name: 'discipline', label: 'Disciplina', items: [
+      { name: 'warnings', path: '/advertencias', label: 'Advertências', icon: MessageSquareWarning, description: 'Consulta e análise de solicitações de advertência.' },
+      { name: 'suspensions', path: '/suspensoes', label: 'Suspensões', icon: Ban, description: 'Gestão das suspensões do transporte universitário.' },
+    ],
   },
   {
-    name: 'reservations', path: '/reservas', label: 'Reservas', icon: CalendarDays,
-    description: 'Espaço para a consulta administrativa das reservas de transporte universitário.',
+    name: 'communication', label: 'Comunicação', items: [
+      { name: 'announcements', path: '/avisos', label: 'Avisos administrativos', icon: Megaphone, description: 'Publicação de avisos do transporte universitário.' },
+    ],
   },
-  ] },
+  {
+    name: 'account', label: 'Conta', items: [
+      { name: 'profile', path: '/perfil', label: 'Meu perfil', icon: UserRound, description: 'Consulta das informações do perfil administrativo.' },
+    ],
+  },
 ]
 
 export const adminNavigationItems: readonly AdminNavigationItem[] = adminNavigationGroups.flatMap(group => group.items)

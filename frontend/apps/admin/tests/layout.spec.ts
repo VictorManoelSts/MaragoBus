@@ -68,9 +68,12 @@ describe('AdminLayout', () => {
 
 describe('Página inicial administrativa', () => {
   it('integra AdminLayout e BaseCard com o conteúdo solicitado', () => {
-    const wrapper = mount(AdminLayout, { slots: { default: HomePage } })
+    const wrapper = mount(AdminLayout, { props: { title: 'Painel administrativo' }, slots: { default: HomePage } })
     expect(wrapper.findComponent(AdminLayout).exists()).toBe(true)
-    expect(wrapper.get('main h1').text()).toBe('Painel administrativo')
+    expect(wrapper.get('header h1').text()).toBe('Painel administrativo')
+    expect(wrapper.get('main').attributes('aria-labelledby')).toBe(wrapper.get('header h1').attributes('id'))
+    expect(wrapper.get('header h1').classes()).toContain('wrap-anywhere')
+    expect(wrapper.get('header h1').element.parentElement?.classList).toContain('w-full')
     expect(wrapper.get('main p').text()).toBe('Gerenciamento do transporte universitário MaragoBus')
     expect(wrapper.findComponent(BaseCard).text()).toBe('As funcionalidades administrativas serão implementadas posteriormente.')
     expect(wrapper.findAll('main')).toHaveLength(1)

@@ -7,18 +7,7 @@ import AdminMobileNavigation from '../src/components/AdminMobileNavigation.vue'
 import { createAdminRouter } from '../src/router'
 import { setMockSession } from '../../../packages/shared/tests/auth-fixture'
 
-const destinations = [
-  { path: '/', label: 'Visão geral' },
-  { path: '/alunos', label: 'Alunos' },
-  { path: '/motoristas', label: 'Motoristas' },
-  { path: '/faculdades', label: 'Faculdades' },
-  { path: '/pontos-embarque', label: 'Pontos de embarque' },
-  { path: '/advertencias', label: 'Solicitações de advertência' },
-  { path: '/perfil', label: 'Meu perfil' },
-  { path: '/cursos', label: 'Cursos' },
-  { path: '/cursos-ofertados', label: 'Cursos ofertados' },
-  { path: '/reservas', label: 'Reservas' },
-]
+import { destinations, groups, groupSizes } from './navigation-fixture'
 let desktop = false
 const listeners = new Set<() => void>()
 const addListener = vi.fn((_type: string, callback: () => void) => listeners.add(callback))
@@ -85,17 +74,18 @@ describe('Navegação administrativa mobile', () => {
     expect(document.activeElement).toBe(trigger.element)
   })
 
-  it('apresenta os mesmos dez destinos e ícones da sidebar', async () => {
+  it('apresenta os mesmos treze destinos e ícones da sidebar', async () => {
     const { wrapper, trigger } = await application()
     await trigger.trigger('click')
     const links = [...drawer().querySelectorAll('nav a')]
-    expect(links.map(link => ({ path: link.getAttribute('href'), label: link.textContent?.trim() }))).toEqual(destinations)
-    expect(drawer().querySelectorAll('nav svg')).toHaveLength(10)
-    const groups = [...drawer().querySelectorAll('nav section')]
-    expect(groups.map(group => group.querySelector('h3')?.textContent)).toEqual(['Principal', 'Gerenciamento complementar'])
-    expect(groups.map(group => group.querySelectorAll('a').length)).toEqual([7, 3])
-    const headingIds = [...document.querySelectorAll('nav h3')].map(heading => heading.id)
-    expect(new Set(headingIds).size).toBe(4)
+    expect(links.map(link => ({ path: link.getAttribute('href'), label: link.textContent?.trim() }))).toEqual(destinations.map(({ path, label }) => ({ path, label })))
+    expect(drawer().querySelectorAll('nav svg')).toHaveLength(13)
+    const sections = [...drawer().querySelectorAll<HTMLDetailsElement>('nav details')]
+    expect(sections.map(group => group.querySelector('summary')?.textContent)).toEqual(groups)
+    expect(sections.map(group => group.querySelectorAll('a').length)).toEqual(groupSizes)
+    expect(sections.filter(group => group.open)).toEqual([sections[0]])
+    const headingIds = [...document.querySelectorAll('nav h2, nav summary')].map(heading => heading.id)
+    expect(new Set(headingIds).size).toBe(14)
     expect(drawer().querySelector('nav')?.getAttribute('aria-label')).toBe('Navegação administrativa')
     expect(wrapper.findComponent(AdminSidebar).findAll('a').map(link => link.text())).toEqual(destinations.map(item => item.label))
   })
@@ -107,6 +97,7 @@ describe('Navegação administrativa mobile', () => {
     expect(current).toHaveLength(1)
     expect(current[0]!.getAttribute('href')).toBe(path)
     expect(current[0]!.classList.contains('router-link-exact-active')).toBe(true)
+    expect(current[0]!.closest('details')?.open).toBe(true)
   })
 
   it('fecha por Escape e restaura expansão, rolagem e foco', async () => {
@@ -138,11 +129,19 @@ describe('Navegação administrativa mobile', () => {
   it('fecha após selecionar um destino e leva o foco ao conteúdo principal', async () => {
     const { wrapper, trigger, router } = await application()
     await trigger.trigger('click')
+    const navigation = new Promise<void>(resolve => {
+      const remove = router.afterEach(() => {
+        remove()
+        resolve()
+      })
+    })
+    drawer().querySelector<HTMLAnchorElement>('a[href="/alunos"]')!.closest('details')!.open = true
     drawer().querySelector<HTMLAnchorElement>('a[href="/alunos"]')!.click()
+    await navigation
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/alunos')
     expect(drawer().open).toBe(false)
-    expect(wrapper.get('main h1').text()).toBe('Alunos')
+    expect(wrapper.get('header h1').text()).toBe('Alunos')
     expect(document.activeElement).toBe(wrapper.get('main').element)
   })
 
@@ -179,7 +178,7 @@ describe('Navegação administrativa mobile', () => {
     const { trigger } = await application()
     await trigger.trigger('click')
     const first = drawer().querySelector<HTMLButtonElement>('[data-menu-close]')!
-    const last = [...drawer().querySelectorAll<HTMLAnchorElement>('nav a')].at(-1)!
+    const last = [...drawer().querySelectorAll<HTMLElement>('nav summary')].at(-1)!
     last.focus()
     const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
     last.dispatchEvent(tab)

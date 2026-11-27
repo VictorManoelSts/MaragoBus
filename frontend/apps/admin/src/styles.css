@@ -31,6 +31,17 @@
   .admin-drawer__navigation {
     padding: 1rem 1rem max(1rem, env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left, 0px));
   }
+  .admin-navigation-summary {
+    background: var(--mb-app);
+    color: var(--mb-text);
+  }
+  .admin-navigation-summary:focus-visible {
+    outline: 2px solid var(--mb-focus);
+    outline-offset: -2px;
+  }
+  details:not([open]):has([aria-current="page"]) > .admin-navigation-summary {
+    box-shadow: inset 3px 0 0 var(--mb-identity);
+  }
   .admin-sidebar__link {
     min-height: var(--mb-control-md);
     color: var(--mb-text-muted);
