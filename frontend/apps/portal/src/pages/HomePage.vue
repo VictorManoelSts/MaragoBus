@@ -28,6 +28,7 @@ const profile = useStudentProfileStore()
 const demo = useStudentDemoStore()
 const { reference, refresh } = useTransportClock()
 const today = computed(() => getTransportDate(reference.value))
+const suspension = computed(() => reservations.suspensionAt(reference.value))
 const summary = computed(() => reservations.getHomeSummary(today.value))
 const studentName = computed(() => session.user?.name.trim().split(/\s+/)[0])
 
@@ -68,7 +69,7 @@ const confirmationRequest = computed(() => ({
   boardingPointId: selectedPointId.value,
   closures: closures.value,
 }))
-const eligibility = computed(() => reservations.validateConfirmation(confirmationRequest.value, availability.value).status)
+const eligibility = computed(() => reservations.validateConfirmation(confirmationRequest.value, availability.value, reference.value).status)
 const showForm = computed(() => eligibility.value === 'ready' || (eligibility.value === 'point-required' && options.value.length > 0))
 const unavailableReason = computed(() => {
   switch (eligibility.value) {
@@ -109,6 +110,16 @@ const transportHourFormat = new Intl.DateTimeFormat('pt-BR', {
       <h1 class="text-page">{{ studentName ? `Olá, ${studentName}!` : 'Olá!' }}</h1>
       <p class="max-w-prose text-body text-muted">Acompanhe e gerencie suas reservas de transporte.</p>
     </header>
+
+    <BaseAlert v-if="suspension" variant="warning" title="Suspensão administrativa">
+      <p>Cenário demonstrativo de suspensão {{ suspension.kind === 'determined' ? 'com prazo determinado' : 'por prazo indeterminado' }}.</p>
+      <p>Durante a suspensão, você não pode fazer novas reservas.</p>
+      <p v-if="suspension.kind === 'determined'">
+        Retorno previsto em <time :datetime="suspension.returnDate">{{ formatCivilDate(suspension.returnDate) }}</time>
+        (horário de Alagoas).
+      </p>
+      <p v-else>Sem previsão de retorno.</p>
+    </BaseAlert>
 
     <section v-if="summary.currentReservation" aria-labelledby="current-reservation-title">
       <BaseCard>
@@ -169,7 +180,7 @@ const transportHourFormat = new Intl.DateTimeFormat('pt-BR', {
       </BaseCard>
     </section>
 
-    <BaseAlert v-if="availabilityChanged" variant="warning">
+    <BaseAlert v-if="availabilityChanged && !suspension" variant="warning">
       A disponibilidade mudou. Confira a data da viagem antes de tentar confirmar novamente.
     </BaseAlert>
 
@@ -200,7 +211,7 @@ const transportHourFormat = new Intl.DateTimeFormat('pt-BR', {
         </form>
       </BaseCard>
     </section>
-    <BaseAlert v-else-if="!openWindow" variant="warning" :title="closure ? 'Transporte interrompido' : 'Reservas fechadas'">
+    <BaseAlert v-else-if="!suspension && !openWindow" variant="warning" :title="closure ? 'Transporte interrompido' : 'Reservas fechadas'">
       <template v-if="closure">
         <p>Não haverá transporte em <time :datetime="closure.date">{{ formatCivilDate(closure.date) }}</time>.</p>
         <p v-if="closure.reason">{{ closure.reason }}</p>

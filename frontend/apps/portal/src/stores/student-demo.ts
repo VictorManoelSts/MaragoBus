@@ -8,7 +8,8 @@ export const useStudentDemoStore = defineStore('student-demo', () => {
   const session = useSessionStore()
   const selection = computed(() => {
     if (import.meta.env.DEV && !import.meta.env.PROD
-      && session.authenticated && session.user?.id === demoStudentId && hasStudentDemoSession()) {
+      && session.authenticated && session.user?.role === 'student'
+      && session.user.id === demoStudentId && hasStudentDemoSession()) {
       return studentDemoSelection()
     }
     return null
@@ -19,8 +20,10 @@ export const useStudentDemoStore = defineStore('student-demo', () => {
     }
     return null
   })
-  function now() {
-    return scenario.value?.now ?? new Date()
+  function now(reference = new Date()) {
+    const active = scenario.value
+    if (!active) return reference
+    return active.suspension ? new Date(reference.getTime() + active.clockOffset) : active.now
   }
   return { scenario, now }
 })

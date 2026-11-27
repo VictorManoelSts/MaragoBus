@@ -11,6 +11,7 @@ import { getReceiptAvailability } from '../utils/reservation-receipt'
 import { getDriverDemoReservations } from '../mocks/driver-demo-reservations'
 
 import { useStudentDemoStore } from './student-demo'
+import { getActiveSuspension } from '../utils/student-suspension'
 
 export type SimulatedReservation = Omit<StudentReservationSummary, 'status'> & {
   studentId: string
@@ -109,10 +110,15 @@ export const useReservationsStore = defineStore('reservations', () => {
     return { currentReservation: findReservation(today) ?? null, futureReservation }
   }
 
-  function validateConfirmation(request: ConfirmationRequest, availability: ReservationAvailability) {
+  function suspensionAt(reference: Date) {
+    return getActiveSuspension(studentDemo.scenario?.suspension, reference)
+  }
+
+  function validateConfirmation(request: ConfirmationRequest, availability: ReservationAvailability, reference: Date) {
     if (confirming.value) return { status: 'busy' } as const
     const owner = studentId.value
     if (!owner) return { status: 'student-required' } as const
+    if (suspensionAt(reference)) return { status: 'suspended' } as const
     const date = request.travelDate
     if (availability.status !== 'open' || availability.window.travelDate !== date) {
       return { status: 'unavailable' } as const
@@ -128,7 +134,7 @@ export const useReservationsStore = defineStore('reservations', () => {
 
   function confirm(request: ConfirmationRequest) {
     const now = studentDemo.now()
-    const result = validateConfirmation(request, getReservationAvailability(now, studentDemo.scenario?.closures ?? request.closures))
+    const result = validateConfirmation(request, getReservationAvailability(now, studentDemo.scenario?.closures ?? request.closures), now)
     if (result.status !== 'ready') return result
 
     confirming.value = true
@@ -176,6 +182,6 @@ export const useReservationsStore = defineStore('reservations', () => {
   return {
     studentReservations, confirming, studentId, driver, demoDriver, findReservation, findConfirmed, listDriverReservations,
     findDriverReservationForWarning, countConfirmedByCollege,
-    getHomeSummary, getReceiptReservation, validateConfirmation, confirm, cancel,
+    getHomeSummary, getReceiptReservation, suspensionAt, validateConfirmation, confirm, cancel,
   }
 })

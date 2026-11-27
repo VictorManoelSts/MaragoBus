@@ -3,6 +3,7 @@ import type { TransportClosure, TravelDate } from '../types/reservation-availabi
 import { getReservationWindow, getTransportDate, isRegularTravelDay, nextRegularTravelDay } from '../utils/reservation-availability'
 import { getMockReservationForm } from './reservation-form'
 import { getDemonstrationNotices } from './student-notifications'
+import type { StudentSuspension } from '../utils/student-suspension'
 
 const scenarios = {
   completo: { hoursAfterClosing: 7, current: 'confirmed', future: true },
@@ -11,6 +12,8 @@ const scenarios = {
   'prazo-encerrado': { hoursAfterClosing: 5, current: 'confirmed', future: false },
   'sem-reserva': { hoursAfterClosing: 3, current: null, future: false },
   'sem-transporte': { hoursAfterClosing: -2, current: null, future: false },
+  'suspensao-determinada': { hoursAfterClosing: 7, current: 'confirmed', future: false },
+  'suspensao-indeterminada': { hoursAfterClosing: 7, current: 'confirmed', future: false },
 } as const
 
 export const demoStudentId = 'mock-student-test'
@@ -43,6 +46,14 @@ export function createStudentDemo(selection: string, reference = new Date()) {
   const previous = previousTravelDay(today)
   const closing = getReservationWindow(today).closesAt.getTime()
   const now = new Date(closing + scenario.hoursAfterClosing * 3_600_000)
+  let suspension: StudentSuspension | undefined
+  if (name === 'suspensao-determinada') {
+    const followingDay = new Date(today + 'T00:00:00Z')
+    followingDay.setUTCDate(followingDay.getUTCDate() + 1)
+    suspension = { kind: 'determined', returnDate: followingDay.toISOString().slice(0, 10) }
+  } else if (name === 'suspensao-indeterminada') {
+    suspension = { kind: 'indefinite' }
+  }
   const form = getMockReservationForm(demoStudentId)
   const point = form.boardingPoints.find(item => item.id === 'demo-center')!
   const closures: readonly TransportClosure[] = name === 'sem-transporte'
@@ -79,7 +90,8 @@ export function createStudentDemo(selection: string, reference = new Date()) {
     educationModality: 'Presencial',
   }
   return {
-    now, closures, reservations,
+    now, closures, reservations, suspension,
+    clockOffset: suspension ? now.getTime() - reference.getTime() : 0,
     profile,
     defaultBoardingPointId: point.id,
     readNoticeIds: getDemonstrationNotices(demoStudentId).slice(0, 1).map(notice => notice.id),

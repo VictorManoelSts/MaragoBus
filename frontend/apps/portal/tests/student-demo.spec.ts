@@ -2,11 +2,13 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createMemoryHistory } from 'vue-router'
+import { nextTick } from 'vue'
 import { applyDriverDemoPreference } from '@maragobus/shared/auth/driver-demo'
 import { useSessionStore } from '@maragobus/shared/auth/session'
 import { selectStudentDemo } from '@maragobus/shared/auth/student-demo'
 import { setMockSession } from '../../../packages/shared/tests/auth-fixture'
 import StudentProfilePage from '../src/pages/StudentProfilePage.vue'
+import HomePage from '../src/pages/HomePage.vue'
 import { createPortalRouter } from '../src/router'
 import { useReservationsStore } from '../src/stores/reservations'
 import { useStudentDemoStore } from '../src/stores/student-demo'
@@ -192,4 +194,89 @@ it('mantém o cenário do motorista separado ao alternar na mesma aba', async ()
   expect(store.studentReservations).toEqual([])
   expect(getTransportDate(useStudentDemoStore().now())).toBe(monday)
   expect(useStudentDemoStore().now().getTime()).toBe(Date.now())
+})
+
+it.each([
+  ['suspensao-determinada', 'Retorno previsto em 17/11/2026'],
+  ['suspensao-indeterminada', 'Sem previsão de retorno.'],
+])('bloqueia a criação em %s e mantém as reservas e as rotas existentes', async (scenario, message) => {
+  const pinia = createPinia()
+  const router = createPortalRouter(createMemoryHistory(), pinia)
+  const session = useSessionStore(pinia)
+  const store = useReservationsStore(pinia)
+  const demo = useStudentDemoStore(pinia)
+  await router.push('/demo-aluno?cenario=' + scenario)
+  expect(store.suspensionAt(demo.now())).toBeUndefined()
+  await session.login(credentials)
+  await router.push('/')
+
+  const wrapper = mount(HomePage, { global: { plugins: [pinia, router] } })
+  try {
+    const alert = wrapper.get('[role="status"]:not(.sr-only)')
+    expect(alert.text()).toContain('Suspensão administrativa')
+    expect(alert.text()).toContain('Cenário demonstrativo')
+    expect(alert.text()).toContain(message)
+    expect(alert.text()).toContain('não pode fazer novas reservas')
+    expect(wrapper.find('form').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Ver comprovante')
+    const before = [...store.studentReservations]
+    expect(before).toHaveLength(3)
+    expect(getReservationAvailability(demo.now()).status).toBe('open')
+    expect(store.confirm({
+      travelDate: '2026-11-17', context: useStudentProfileStore(pinia).reservationContext,
+      boardingPointId: 'demo-center', closures: [],
+    }).status).toBe('suspended')
+    expect(store.studentReservations).toEqual(before)
+    expect(store.getReceiptReservation(store.findConfirmed(monday)!.id, demo.now())).toBeDefined()
+
+    for (const [path, name] of [['/perfil', 'profile'], ['/reservas', 'reservations'], ['/comprovante', 'receipt']]) {
+      await router.push(path)
+      expect(router.currentRoute.value.name).toBe(name)
+    }
+    await router.push('/demo-aluno?cenario=aberta')
+    expect(store.suspensionAt(demo.now())).toBeUndefined()
+    expect(store.studentReservations.every(item => item.id.includes('-aberta-'))).toBe(true)
+    await router.push('/demo-aluno?cenario=0')
+    await setMockSession('student')
+    expect(store.suspensionAt(demo.now())).toBeUndefined()
+    expect(store.studentReservations).toEqual([])
+  } finally {
+    wrapper.unmount()
+  }
+})
+
+it('retira o aviso e libera a confirmação na virada da data civil em Maceió', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  vi.setSystemTime(new Date(monday + 'T12:00:00Z'))
+  const pinia = createPinia()
+  const router = createPortalRouter(createMemoryHistory(), pinia)
+  const demo = useStudentDemoStore(pinia)
+  const store = useReservationsStore(pinia)
+  await router.push('/demo-aluno?cenario=suspensao-determinada')
+  const login = useSessionStore(pinia).login(credentials)
+  await vi.advanceTimersByTimeAsync(1000)
+  await login
+  await router.push('/')
+  const request = {
+    travelDate: '2026-11-17', context: useStudentProfileStore(pinia).reservationContext,
+    boardingPointId: 'demo-center', closures: [],
+  }
+  const before = [...store.studentReservations]
+  await vi.advanceTimersByTimeAsync(Date.parse('2026-11-17T02:59:59.999Z') - demo.now().getTime())
+  const wrapper = mount(HomePage, { global: { plugins: [pinia, router] } })
+  try {
+    expect(store.confirm(request).status).toBe('suspended')
+    expect(wrapper.text()).toContain('Suspensão administrativa')
+    expect(wrapper.find('form').exists()).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    await nextTick()
+    expect(demo.now().toISOString()).toBe('2026-11-17T03:00:00.000Z')
+    expect(wrapper.text()).not.toContain('Suspensão administrativa')
+    expect(wrapper.get('form').text()).toContain('Confirmar reserva')
+    expect(store.studentReservations).toEqual(before)
+    expect(store.confirm(request).status).toBe('confirmed')
+    expect(store.studentReservations).toHaveLength(before.length + 1)
+  } finally {
+    wrapper.unmount()
+  }
 })
