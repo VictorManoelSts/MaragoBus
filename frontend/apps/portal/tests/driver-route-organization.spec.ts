@@ -25,6 +25,7 @@ async function assignCollege(select: Pick<DOMWrapper<HTMLSelectElement>, 'elemen
 
 afterEach(() => {
   vi.useRealTimers()
+  delete document.documentElement.dataset.theme
   history.replaceState(null, '', '/login?demo-motorista=0')
   applyDriverDemoPreference()
   history.replaceState(null, '', '/')
@@ -118,6 +119,7 @@ describe('Organização de rotas', () => {
     expect(totals()).toEqual(['1/1', '0/0'])
     expect(rows('Motorista de Teste').text()).toContain('0 alunos')
     await rows('Motorista de Teste').get('button').trigger('click')
+    expect(dialog().classes()).toContain('mb-modal')
     await dialog().get('footer button').trigger('click')
     expect(totals()).toEqual(['0/0', '0/0'])
   })
@@ -323,7 +325,8 @@ describe('Organização de rotas', () => {
 })
 
 describe('Histórico de alterações da distribuição', () => {
-  it('mantém indicadores, atribuições e histórico consistentes no fluxo completo pela página', async () => {
+  it.each(['light', 'dark'])('mantém os indicadores, as atribuições e o histórico no tema %s', async theme => {
+    document.documentElement.dataset.theme = theme
     const reservation = await seedReservation()
     vi.setSystemTime(openTime)
     const { organization, rows, totals } = render()
@@ -368,7 +371,9 @@ describe('Histórico de alterações da distribuição', () => {
     expect(totals()).toEqual(['1/1', '0/0'])
     expect(rows(secondDriver.name).text()).toContain('0 alunos')
     expect(historyTypes()).toEqual(operations)
-    expect(organization.get('details summary').text()).toContain('7 alterações')
+    const summary = organization.get('details summary')
+    expect(summary.classes()).toContain('hover:bg-hover')
+    expect(summary.text()).toContain('7 alterações')
   })
 
   it('começa recolhido, mostra o estado vazio e isola a consulta por data e sessão', async () => {

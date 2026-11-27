@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { BrandLogo } from '@maragobus/shared'
+import PortalThemeSwitch from '../components/PortalThemeSwitch.vue'
 
 const mobileNavigation = ref<HTMLElement>()
 let observer: ResizeObserver | undefined
@@ -58,10 +59,14 @@ onBeforeUnmount(() => {
       Ir para o conteúdo principal
     </a>
 
-    <header class="border-t-2 border-t-accent border-b border-line bg-surface">
-      <div class="flex w-full items-center px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
-        <BrandLogo class="w-44 sm:w-52" />
-        <slot name="header-actions" />
+    <header class="border-b border-line bg-surface">
+      <div class="flex w-full flex-wrap items-center gap-2 px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
+        <BrandLogo
+          class="w-44 min-w-0 flex-[0_1_auto] sm:w-52"
+        />
+        <slot name="header-controls">
+          <PortalThemeSwitch class="ml-auto" />
+        </slot>
       </div>
     </header>
 

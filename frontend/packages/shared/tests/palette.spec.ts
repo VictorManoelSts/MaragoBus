@@ -6,18 +6,17 @@ import { describe, expect, it } from 'vitest'
 const source = (path: string) => readFileSync(resolvePath('packages/shared', path), 'utf8')
 const tokens = source('src/styles/tokens.css')
 const base = source('src/styles/base.css')
-const variables: Record<string, string> = Object.fromEntries(
-  [...tokens.split('@theme inline')[0]!.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)]
-    .map(match => [match[1]!, match[2]!.trim()]),
-)
+const variables = rule(tokens, ':root')
+const darkOverrides = rule(tokens, ':root[data-theme="dark"]')
+const darkVariables = { ...variables, ...darkOverrides }
 
-function resolve(name: string, visited = new Set<string>()): string {
+function resolve(name: string, values = variables, visited = new Set<string>()): string {
   if (visited.has(name)) throw new Error('Referência circular: ' + name)
   visited.add(name)
-  const value = variables[name]
+  const value = values[name]
   if (!value) throw new Error('Token ausente: ' + name)
   const alias = /^var\((--[\w-]+)\)$/.exec(value)
-  return alias ? resolve(alias[1]!, visited) : value
+  return alias ? resolve(alias[1]!, values, visited) : value
 }
 function rule(css: string, selector: string) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -33,10 +32,54 @@ function luminance(hex: string) {
     .map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4)
   return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722
 }
-function contrast(first: string, second: string) {
-  const values = [luminance(resolve(first)), luminance(resolve(second))].sort((a, b) => b - a)
+function contrast(first: string, second: string, theme = variables) {
+  const values = [luminance(resolve(first, theme)), luminance(resolve(second, theme))].sort((a, b) => b - a)
   return (values[0]! + 0.05) / (values[1]! + 0.05)
 }
+
+describe('Estados do Portal', () => {
+  const portal = source('../../apps/portal/src/styles.css')
+  const lightPortal = rule(portal, ':root:not([data-theme="dark"])')
+  const darkPortal = rule(portal, ':root[data-theme="dark"]')
+
+  it.each(['success', 'danger', 'warning', 'info'])('garante contraste do estado %s nos dois temas', state => {
+    const text = '--mb-' + state
+    const surface = text + '-surface'
+    const border = text + '-border'
+    const dark = { ...darkVariables, ...darkPortal }
+
+    for (const theme of [
+      variables,
+      { ...variables, ...lightPortal },
+      dark,
+    ]) {
+      expect(contrast(text, surface, theme)).toBeGreaterThanOrEqual(4.5)
+    }
+    expect(contrast(border, surface, dark)).toBeGreaterThanOrEqual(3)
+  })
+
+  it('distingue as quatro variantes no escuro e mantém foco e erro visíveis', () => {
+    const theme = { ...darkVariables, ...darkPortal }
+    for (const suffix of ['', '-surface', '-border']) {
+      const colors = ['success', 'danger', 'warning', 'info'].map(state => resolve('--mb-' + state + suffix, theme))
+      expect(new Set(colors).size).toBe(4)
+    }
+    expect(contrast('--mb-danger', '--mb-surface', theme)).toBeGreaterThanOrEqual(4.5)
+    for (const surface of ['--mb-app', '--mb-surface', '--mb-hover']) {
+      expect(contrast('--mb-focus', surface, theme)).toBeGreaterThanOrEqual(3)
+    }
+    expect(contrast('--mb-identity', '--mb-on-primary', theme)).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
+it('preserva a paleta oficial e acompanha o esquema efetivo nos controles nativos', () => {
+  for (const name of Object.keys(darkOverrides)) {
+    expect(name).not.toMatch(/^--mb-brand-/)
+    expect(variables).toHaveProperty(name)
+  }
+  expect(rule(base, ':root')['color-scheme']).toBe('light')
+  expect(rule(base, ':root[data-theme="dark"]')['color-scheme']).toBe('dark')
+})
 
 describe('Paleta oficial MaragoBus', () => {
   it.each([
@@ -129,7 +172,7 @@ describe('Aplicação dos tokens aos componentes', () => {
     expect(rule(styles, selector + ':focus-visible').outline).toBe('2px solid var(--mb-focus)')
     const layout = source('../../apps/' + app + '/src/layouts/' + (app === 'portal' ? 'PortalLayout' : 'AdminLayout') + '.vue')
     expect(layout).toContain('bg-app text-content')
-    expect(layout).toContain('border-t-accent')
+    if (app === 'admin') expect(layout).toContain('border-t-accent')
     expect(layout).toContain('bg-surface')
   })
 
@@ -147,12 +190,19 @@ describe('Contrastes calculados dos tokens', () => {
     ['--mb-on-secondary', '--mb-secondary', 4.5],
     ['--mb-on-secondary', '--mb-secondary-hover', 4.5],
     ['--mb-text', '--mb-app', 4.5],
+    ['--mb-text', '--mb-surface', 4.5],
+    ['--mb-heading', '--mb-app', 4.5],
+    ['--mb-heading', '--mb-surface', 4.5],
     ['--mb-text-muted', '--mb-app', 4.5],
     ['--mb-text-muted', '--mb-surface', 4.5],
     ['--mb-identity', '--mb-surface', 4.5],
     ['--mb-identity', '--mb-hover', 4.5],
     ['--mb-focus', '--mb-app', 3],
     ['--mb-focus', '--mb-surface', 3],
+    ['--mb-on-primary', '--mb-identity', 3],
+    ['--mb-identity', '--mb-secondary', 3],
+    ['--mb-text-muted', '--mb-secondary', 3],
+    ['--mb-control-border', '--mb-secondary', 3],
     ['--mb-control-border', '--mb-surface', 3],
     ['--mb-primary', '--mb-secondary', 3],
     ['--mb-disabled-text', '--mb-disabled', 4.5],
@@ -163,5 +213,8 @@ describe('Contrastes calculados dos tokens', () => {
   ]
   it.each(pairs)('%s sobre %s tem contraste mínimo de %s:1', (foreground, background, minimum) => {
     expect(contrast(foreground, background)).toBeGreaterThanOrEqual(minimum)
+  })
+  it.each(pairs)('%s sobre %s tem contraste escuro mínimo de %s:1', (foreground, background, minimum) => {
+    expect(contrast(foreground, background, darkVariables)).toBeGreaterThanOrEqual(minimum)
   })
 })

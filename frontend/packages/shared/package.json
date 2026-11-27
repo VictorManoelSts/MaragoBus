@@ -8,6 +8,7 @@
     "./styles.css": "./src/styles/index.css",
     "./branding/*": "./src/assets/branding/*",
     "./demo": "./src/demo/DesignSystemPage.vue",
+    "./theme": "./src/theme/index.ts",
     "./auth/*": "./src/auth/*.ts"
   },
   "peerDependencies": {

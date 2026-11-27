@@ -10,7 +10,10 @@ import { setMockSession } from '../../../packages/shared/tests/auth-fixture'
 
 const historyPath = '/motorista/advertencias'
 
-afterEach(() => { vi.useRealTimers() })
+afterEach(() => {
+  vi.useRealTimers()
+  delete document.documentElement.dataset.theme
+})
 
 describe('Fluxo de solicitações de advertência do motorista', () => {
   it.each([false, true])('protege o histórico de quem não é motorista (aluno autenticado: %s)', async student => {
@@ -20,7 +23,8 @@ describe('Fluxo de solicitações de advertência do motorista', () => {
     expect(router.currentRoute.value.path).toBe(student ? '/' : '/login')
   })
 
-  it('abre pela reserva, valida, restaura o foco ao voltar, envia e filtra no histórico', async () => {
+  it.each(['light', 'dark'])('valida, restaura o foco, envia e filtra advertências no tema %s', async theme => {
+    document.documentElement.dataset.theme = theme
     vi.setSystemTime(new Date('2026-11-16T13:00:00Z'))
     await setMockSession('student')
     const reservations = useReservationsStore()
@@ -43,6 +47,7 @@ describe('Fluxo de solicitações de advertência do motorista', () => {
     await wrapper.get('main summary').trigger('click')
     await action.trigger('click')
     const studentDialog = dialog()
+    expect(studentDialog.classes()).toContain('mb-modal')
     expect(studentDialog.attributes('aria-modal')).toBe('true')
     expect(studentDialog.get('h2').attributes('id')).toBe(studentDialog.attributes('aria-labelledby'))
     expect(studentDialog.get('h2').text()).toBe('Dados do aluno')
@@ -61,6 +66,7 @@ describe('Fluxo de solicitações de advertência do motorista', () => {
     await dialog().get('textarea').setValue('   ')
     await submit()
     expect(dialog().get('[role="alert"]').text()).toBe('Informe o motivo da solicitação.')
+    expect(dialog().get('[role="alert"]').classes()).toContain('mb-error')
     expect(dialog().get('textarea').attributes('aria-invalid')).toBe('true')
     expect(document.activeElement).toBe(dialog().get('textarea').element)
     expect(useWarningRequestsStore().ownRequests).toHaveLength(0)
@@ -79,6 +85,7 @@ describe('Fluxo de solicitações de advertência do motorista', () => {
     await flushPromises()
     expect(body.find('dialog[open]').exists()).toBe(false)
     expect(document.activeElement?.textContent).toContain('Solicitação de advertência enviada.')
+    expect(wrapper.get('.mb-feedback--success').classes()).toContain('mb-alert')
     expect(reservations.listDriverReservations('2026-11-16')).toHaveLength(1)
 
     await action.trigger('click')
@@ -93,6 +100,8 @@ describe('Fluxo de solicitações de advertência do motorista', () => {
     await flushPromises()
     const main = wrapper.get('main')
     const status = main.get('select')
+    expect(status.classes()).toContain('mb-control')
+    expect(main.get('li .mb-card').find('.mb-badge').exists()).toBe(true)
     expect(main.get('li').text()).toContain('Aluno de Teste')
     expect(main.get('li').text()).toContain('Motivo demonstrativo.')
     expect(main.get('li').text()).toContain('Pendente')
@@ -101,6 +110,7 @@ describe('Fluxo de solicitações de advertência do motorista', () => {
     for (const value of ['APROVADA', 'REJEITADA']) {
       await status.setValue(value)
       expect(main.get('[role="status"]').text()).toBe('Nenhuma solicitação para a situação selecionada.')
+      expect(main.get('[role="status"]').classes()).toContain('text-muted')
       expect(main.findAll('li')).toHaveLength(0)
     }
     await status.setValue('all')

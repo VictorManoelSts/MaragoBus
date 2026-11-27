@@ -5,7 +5,7 @@ import iconBlue from '../assets/branding/icone-azul.svg?url'
 import iconDark from '../assets/branding/icone-escuro.svg?url'
 import type { BrandVariant } from '../types/design-system'
 
-const props = withDefaults(defineProps<{ variant?: BrandVariant; alt?: string }>(), {
+withDefaults(defineProps<{ variant?: BrandVariant; alt?: string }>(), {
   variant: 'horizontal',
   alt: 'MaragoBus',
 })
@@ -18,5 +18,10 @@ const sources: Record<BrandVariant, string> = {
 </script>
 
 <template>
-  <img :src="sources[props.variant]" :alt="alt" class="mb-brand-logo" :class="'mb-brand-logo--' + variant" />
+  <img
+    :src="sources[variant]"
+    :alt="alt"
+    class="mb-brand-logo"
+    :class="'mb-brand-logo--' + variant"
+  />
 </template>

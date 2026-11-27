@@ -7,6 +7,7 @@
     font-synthesis: none;
     text-rendering: optimizeLegibility;
   }
+  :root[data-theme="dark"] { color-scheme: dark; }
   html { scrollbar-gutter: stable; }
   body { margin: 0; min-width: 320px; font-size: 1rem; line-height: 1.6; }
   button, input, select, textarea { font: inherit; }

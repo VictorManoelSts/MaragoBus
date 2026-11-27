@@ -49,6 +49,41 @@
   --mb-duration: 150ms;
 }
 
+:root[data-theme="dark"] {
+  --mb-identity: var(--mb-brand-mist);
+  --mb-primary: var(--mb-brand-aqua);
+  --mb-primary-hover: var(--mb-brand-mist);
+  --mb-on-primary: var(--mb-app);
+  --mb-secondary: #292929;
+  --mb-secondary-hover: #383838;
+  --mb-on-secondary: var(--mb-brand-mist);
+  --mb-text: #f2f2f2;
+  --mb-text-muted: #bdbdbd;
+  --mb-app: #141414;
+  --mb-surface: #202020;
+  --mb-border: #494949;
+  --mb-control-border: #909090;
+  --mb-hover: var(--mb-secondary);
+  --mb-focus: var(--mb-brand-aqua);
+  --mb-disabled: #303030;
+  --mb-disabled-text: #aaaaaa;
+  --mb-success: var(--mb-text);
+  --mb-success-surface: var(--mb-secondary);
+  --mb-success-border: var(--mb-control-border);
+  --mb-warning: var(--mb-text);
+  --mb-warning-surface: var(--mb-secondary);
+  --mb-warning-border: var(--mb-control-border);
+  --mb-danger: var(--mb-text);
+  --mb-danger-surface: var(--mb-secondary);
+  --mb-danger-border: var(--mb-control-border);
+  --mb-info: var(--mb-text);
+  --mb-info-surface: var(--mb-secondary);
+  --mb-info-border: var(--mb-control-border);
+  --mb-backdrop: rgb(0 0 0 / 72%);
+  --mb-shadow-card: 0 1px 3px rgb(0 0 0 / 30%);
+  --mb-shadow-modal: 0 16px 48px rgb(0 0 0 / 48%);
+}
+
 @theme inline {
   --font-sans: var(--mb-font-sans);
   --spacing: var(--mb-space-unit);

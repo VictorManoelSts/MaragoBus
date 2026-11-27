@@ -257,18 +257,6 @@ const transportHourFormat = new Intl.DateTimeFormat('pt-BR', {
 </template>
 
 <style scoped>
-.student-home {
-  --mb-success: #166534;
-  --mb-success-surface: #ecfdf3;
-  --mb-success-border: #78aa89;
-  --mb-danger: #991b1b;
-  --mb-danger-surface: #fef2f2;
-  --mb-danger-border: #d69797;
-  --mb-warning: #854d0e;
-  --mb-warning-surface: #fffbeb;
-  --mb-warning-border: #c6a35e;
-}
-
 .student-home :deep(.mb-card__body) {
   padding: 1rem;
 }

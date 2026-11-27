@@ -20,6 +20,17 @@ const credentials = { cpf: '90000000175', password: 'AlunoTeste!53' }
 const driverCredentials = { cpf: '90000000418', password: 'MotoristaDemo!24' }
 const monday = '2026-11-16'
 
+const homeStates = [
+  ['completo', '.mb-badge.mb-feedback--success', 'Confirmada'],
+  ['aberta', '.mb-badge.mb-feedback--success', 'Reservas abertas'],
+  ['cancelada', '.mb-badge.mb-feedback--danger', 'Cancelada'],
+  ['prazo-encerrado', '.mb-alert.mb-feedback--warning', 'Reservas fechadas'],
+  ['sem-reserva', '.mb-alert.mb-feedback--warning', 'Próxima abertura'],
+  ['sem-transporte', '.mb-alert.mb-feedback--warning', 'Transporte interrompido'],
+  ['suspensao-determinada', '.mb-alert.mb-feedback--warning', 'Retorno previsto em'],
+  ['suspensao-indeterminada', '.mb-alert.mb-feedback--warning', 'Sem previsão de retorno'],
+] as const
+
 beforeEach(() => {
   vi.setSystemTime(new Date(monday + 'T12:00:00Z'))
 })
@@ -30,6 +41,35 @@ afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllEnvs()
 })
+
+it.each(homeStates)('identifica o cenário %s pelo texto e pela variante nos dois temas',
+  async (scenario, selector, label) => {
+    const pinia = createPinia()
+    const router = createPortalRouter(createMemoryHistory(), pinia)
+    await router.push('/demo-aluno?cenario=' + scenario)
+    await useSessionStore(pinia).login(credentials)
+    await router.push('/')
+    const wrapper = mount(HomePage, { global: { plugins: [pinia, router] } })
+    const root = document.documentElement
+    const previousTheme = root.dataset.theme
+    try {
+      for (const theme of ['light', 'dark']) {
+        root.dataset.theme = theme
+        const feedback = wrapper.get(selector)
+        expect(feedback.text()).toContain(label)
+        if (selector.startsWith('.mb-alert')) {
+          expect(feedback.get('svg').attributes('aria-hidden')).toBe('true')
+        }
+      }
+      if (scenario === 'sem-reserva') {
+        expect(wrapper.find('#current-reservation-title, #next-reservation-title').exists()).toBe(false)
+      }
+    } finally {
+      wrapper.unmount()
+      if (previousTheme === undefined) delete root.dataset.theme
+      else root.dataset.theme = previousTheme
+    }
+  })
 
 it('ativa pela rota e preenche o perfil, o histórico e os avisos do aluno autenticado', async () => {
   const pinia = createPinia()

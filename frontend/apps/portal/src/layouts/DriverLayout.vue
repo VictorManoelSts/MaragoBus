@@ -6,7 +6,7 @@ import PortalLayout from './PortalLayout.vue'
 </script>
 
 <template>
-  <PortalLayout>
+  <PortalLayout class="driver-layout">
     <template #desktop-navigation>
       <PortalNavigation :items="driverNavigationItems" label="Navegação do motorista" variant="desktop" />
     </template>

@@ -5,10 +5,12 @@ import { BaseBadge, BaseCard } from '@maragobus/shared'
 import { applyDriverDemoPreference, clearDriverDemoSession, setDriverDemoSession } from '@maragobus/shared/auth/driver-demo'
 import { authNavigation } from '@maragobus/shared/auth/navigation'
 import { useSessionStore } from '@maragobus/shared/auth/session'
+import { startTheme } from '@maragobus/shared/theme'
 import App from '../src/App.vue'
 import DriverLayout from '../src/layouts/DriverLayout.vue'
 import StudentNavigation from '../src/components/StudentNavigation.vue'
 import PortalNavigation from '../src/components/PortalNavigation.vue'
+import PortalThemeSwitch from '../src/components/PortalThemeSwitch.vue'
 import { createPortalRouter } from '../src/router'
 import { setMockSession } from '../../../packages/shared/tests/auth-fixture'
 
@@ -18,17 +20,66 @@ const destinations = [
   { path: '/motorista/perfil', label: 'Meu perfil', title: 'Perfil do motorista' },
 ]
 
-async function application(path: string) {
+async function application(path: string, attachTo?: HTMLElement) {
   await setMockSession('driver')
   const router = createPortalRouter(createMemoryHistory())
   await router.push(path)
   await router.isReady()
-  const wrapper = mount(App, { global: { plugins: [router] } })
+  const wrapper = mount(App, { attachTo, global: { plugins: [router] } })
   await flushPromises()
   return { wrapper, router }
 }
 
 describe('Navegação do motorista', () => {
+  it('alterna o tema, sincroniza outra aba e preserva a preferência ao sair pelo perfil', async () => {
+    const key = 'maragobus.theme'
+    localStorage.removeItem(key)
+    const stop = startTheme()
+    const { wrapper, router } = await application('/motorista/reservas', document.body)
+    const external = vi.spyOn(authNavigation, 'openExternal').mockImplementation(() => {})
+    try {
+      const toggle = wrapper.get<HTMLButtonElement>('header button[role="switch"]')
+      expect(toggle.attributes('aria-label')).toBe('Tema escuro')
+      expect(toggle.attributes('aria-checked')).toBe('false')
+      expect(toggle.findAll('svg')).toHaveLength(2)
+      expect(wrapper.get('header img').attributes('src')).toContain('logo-horizontal.svg')
+      expect(wrapper.get('header img').classes()).toContain('min-w-0')
+      expect(toggle.classes()).toContain('shrink-0')
+      toggle.element.focus()
+      await toggle.trigger('click')
+      expect(document.activeElement).toBe(toggle.element)
+      expect(localStorage.getItem(key)).toBe('dark')
+      expect(document.documentElement.dataset.theme).toBe('dark')
+      expect(toggle.attributes('aria-checked')).toBe('true')
+
+      for (const { path, title } of destinations) {
+        await router.push(path)
+        await flushPromises()
+        expect(wrapper.get('main h1').text()).toBe(title)
+        expect(toggle.attributes('aria-checked')).toBe('true')
+      }
+
+      localStorage.setItem(key, 'light')
+      window.dispatchEvent(new StorageEvent('storage', { key, storageArea: localStorage }))
+      await flushPromises()
+      expect(document.documentElement.dataset.theme).toBe('light')
+      expect(toggle.attributes('aria-checked')).toBe('false')
+      await toggle.trigger('click')
+      await wrapper.get('main button').trigger('click')
+      await flushPromises()
+      expect(useSessionStore().authenticated).toBe(false)
+      expect(external).toHaveBeenCalledWith('http://localhost:5173/login')
+      expect(localStorage.getItem(key)).toBe('dark')
+      expect(document.documentElement.dataset.theme).toBe('dark')
+    } finally {
+      wrapper.unmount()
+      external.mockRestore()
+      stop()
+      localStorage.removeItem(key)
+      delete document.documentElement.dataset.theme
+    }
+  })
+
   it('abre o perfil com a identidade da sessão e campos somente para leitura', async () => {
     const { wrapper } = await application('/motorista/perfil')
     expect(wrapper.findComponent(DriverLayout).exists()).toBe(true)
@@ -44,6 +95,8 @@ describe('Navegação do motorista', () => {
     expect(card.text()).toContain('Solicite alterações cadastrais à administração.')
     expect(card.findAll('input, form, select, textarea, button')).toHaveLength(0)
     expect(wrapper.get('main').findAll('button').map(button => button.text())).toEqual(['Sair'])
+    expect(wrapper.get('header').findAll('button, select')).toHaveLength(1)
+    expect(wrapper.getComponent(PortalThemeSwitch).attributes('role')).toBe('switch')
   })
 
   it('indica os dados indisponíveis na sessão', async () => {

@@ -89,7 +89,7 @@ it('compensa a altura da barra sticky e rola apenas quando ela encobre o foco', 
   window.dispatchEvent(new Event('resize'))
   const inset = () => document.documentElement.style.getPropertyValue('--portal-mobile-scroll-inset')
   expect(inset()).toBe('84px')
-  const target = wrapper.get('button').element
+  const target = wrapper.get<HTMLButtonElement>('main button').element
   const targetRect = vi.spyOn(target, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 540, 80, 40))
   target.focus()
   frame?.(0)

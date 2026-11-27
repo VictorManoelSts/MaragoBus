@@ -89,7 +89,7 @@ function markAllAsRead(event: MouseEvent) {
 </script>
 
 <template>
-  <div ref="root" class="relative ml-auto shrink-0" @focusout="dismissOnFocusOut">
+  <div ref="root" class="ml-auto shrink-0 sm:relative" @focusout="dismissOnFocusOut">
     <button
       ref="bell"
       type="button"
@@ -172,6 +172,13 @@ function markAllAsRead(event: MouseEvent) {
 .notification-panel {
   width: min(26rem, calc(100cqw - 2rem));
   max-height: calc(100dvh - 6rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
+
+@media (width < 40rem) {
+  .notification-panel {
+    right: 1rem;
+    max-height: calc(100dvh - 10rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
 }
 
 @media (max-height: 24rem) {

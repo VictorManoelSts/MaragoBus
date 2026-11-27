@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { BaseButton, BaseCard, BaseInput, BaseSelect } from '@maragobus/shared'
+import { authNavigation } from '@maragobus/shared/auth/navigation'
+import { useSessionStore } from '@maragobus/shared/auth/session'
 import { useStudentProfileStore } from '../stores/student-profile'
 
 const profile = useStudentProfileStore()
+const router = useRouter()
+const session = useSessionStore()
 const draft = reactive({ ...profile.preferences })
 const form = ref<HTMLFormElement | null>(null)
 const showErrors = ref(false)
@@ -54,6 +59,11 @@ async function save() {
 function discard() {
   resetDraft()
   void reportFeedback('Alterações descartadas.')
+}
+
+async function logout() {
+  session.logout()
+  await authNavigation.afterLogout(router)
 }
 </script>
 
@@ -119,5 +129,8 @@ function discard() {
         A alteração de senha estará disponível após a integração com a autenticação real.
       </p>
     </BaseCard>
+    <div class="flex justify-end border-t border-line pt-5">
+      <BaseButton variant="outline" class="w-full sm:w-auto" @click="logout">Sair</BaseButton>
+    </div>
   </div>
 </template>

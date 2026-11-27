@@ -2,7 +2,41 @@
 @import "@maragobus/shared/styles.css";
 @source "../../../packages/shared/src";
 
+/* Os diálogos teleportados para body herdam os mesmos tokens do Portal. */
+:root:not([data-theme="dark"]) {
+  --mb-success: #166534;
+  --mb-success-surface: #ecfdf3;
+  --mb-success-border: #78aa89;
+  --mb-danger: #991b1b;
+  --mb-danger-surface: #fef2f2;
+  --mb-danger-border: #d69797;
+  --mb-warning: #854d0e;
+  --mb-warning-surface: #fffbeb;
+  --mb-warning-border: #c6a35e;
+}
+
+:root[data-theme="dark"] {
+  --mb-success: #a6e3b5;
+  --mb-success-surface: #183025;
+  --mb-success-border: #679d79;
+  --mb-warning: #f4d290;
+  --mb-warning-surface: #362a16;
+  --mb-warning-border: #b28e52;
+  --mb-danger: #ffc1c1;
+  --mb-danger-surface: #3b2326;
+  --mb-danger-border: #cb8088;
+  --mb-info: #bbdfec;
+  --mb-info-surface: #1d303a;
+  --mb-info-border: #6e9cad;
+}
+
 @layer components {
+  .driver-layout > header > div,
+  .student-layout > header > div { flex-wrap: nowrap; }
+  @media (width < 40rem) {
+    .student-layout > header { position: relative; }
+  }
+  html:has(.driver-layout) body,
   html:has(.student-layout) body { min-width: 0; }
   html { scroll-padding-bottom: var(--portal-mobile-scroll-inset, 0px); }
   .portal-layout {

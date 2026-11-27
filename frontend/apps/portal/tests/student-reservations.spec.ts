@@ -225,4 +225,38 @@ describe('Minhas reservas', () => {
     expect(wrapper.findAll('main button')).toHaveLength(0)
     expect(wrapper.get('main a[href="/comprovante"]').text()).toBe('Ver comprovante')
   })
+
+  it.each([
+    { time: '16h', before: '2026-11-17T18:59:59Z', selector: 'main li button' },
+    { time: '00h', before: '2026-11-18T02:59:59Z', selector: 'main li a[href="/comprovante"]' },
+  ])('recupera o foco quando a ação desaparece às $time', async ({ before, selector }) => {
+    confirm('2026-11-17')
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    vi.setSystemTime(new Date(before))
+    const { wrapper } = await page()
+    const action = wrapper.get<HTMLElement>(selector).element
+    action.focus()
+    expect(document.activeElement).toBe(action)
+
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(action.isConnected).toBe(false)
+    expect(document.activeElement).toBe(wrapper.get('main h1').element)
+  })
+
+  it('mantém o foco no filtro quando a ação de cancelar expira', async () => {
+    confirm('2026-11-17')
+    vi.setSystemTime(new Date('2026-11-17T18:59:59Z'))
+    const { wrapper } = await page()
+    const action = wrapper.get('main li button').element
+    const radio = wrapper.get<HTMLInputElement>('input[value="all"]').element
+    radio.focus()
+
+    vi.setSystemTime(new Date('2026-11-17T19:00:00Z'))
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flushPromises()
+
+    expect(action.isConnected).toBe(false)
+    expect(document.activeElement).toBe(radio)
+  })
 })

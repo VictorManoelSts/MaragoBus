@@ -5,6 +5,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory } from 'vue-router'
 import { BaseCard } from '@maragobus/shared'
 import { authNavigation } from '@maragobus/shared/auth/navigation'
+import { startTheme } from '@maragobus/shared/theme'
 import { useSessionStore } from '@maragobus/shared/auth/session'
 import App from '../src/App.vue'
 import StudentNavigation from '../src/components/StudentNavigation.vue'
@@ -106,8 +107,8 @@ describe('Integração das páginas do aluno', () => {
     expect(wrapper.get('main p').text().length).toBeGreaterThan(20)
     expect(wrapper.get('main').findAll('input, select, form')).toHaveLength(path === '/perfil' ? 4 : path === '/reservas' ? 3 : 0)
     const buttons = wrapper.get('main').findAll('button').map(button => button.text())
-    expect(buttons).toEqual(path === '/perfil' ? ['Salvar alterações', 'Descartar alterações'] : [])
-    expect(wrapper.findAll('header button').filter(button => button.text() === 'Sair')).toHaveLength(1)
+    expect(buttons).toEqual(path === '/perfil' ? ['Salvar alterações', 'Descartar alterações', 'Sair'] : [])
+    expect(wrapper.findAll('header button').filter(button => button.text() === 'Sair')).toHaveLength(0)
   })
 
   it('abre os avisos pelo sino e mantém a página atual ativa', async () => {
@@ -180,7 +181,7 @@ describe('Integração das páginas do aluno', () => {
     expect(wrapper.get('main a').attributes('href')).toBe('/')
   })
 
-  it('exibe o perfil sem identificação de teste e encerra a sessão pelo cabeçalho', async () => {
+  it('encerra a sessão pelo perfil após as seções e fora do formulário', async () => {
     const { wrapper } = await application('/perfil')
     expect(wrapper.get('main h1').text()).toBe('Meu perfil')
     const point = wrapper.get('main select')
@@ -189,13 +190,24 @@ describe('Integração das páginas do aluno', () => {
     expect(wrapper.get('main').text()).not.toContain('Sessão de teste')
     const logout = wrapper.findAll('button').filter(button => button.text() === 'Sair')
     expect(logout).toHaveLength(1)
-    expect(logout[0]?.element.closest('header')).toBe(wrapper.get('header').element)
+    expect(logout[0]?.element.closest('main')).toBe(wrapper.get('main').element)
+    expect(logout[0]?.element.closest('form')).toBeNull()
+    expect(logout[0]?.element.parentElement?.previousElementSibling?.textContent).toContain('Segurança')
     const redirect = vi.spyOn(authNavigation, 'openExternal').mockImplementation(() => {})
+    const key = 'maragobus.theme'
+    localStorage.removeItem(key)
+    const stop = startTheme()
     try {
+      await wrapper.get('header [role="switch"]').trigger('click')
       await logout[0]?.trigger('click')
       expect(useSessionStore().authenticated).toBe(false)
       expect(redirect).toHaveBeenCalledWith('http://localhost:5173/login')
+      expect(localStorage.getItem(key)).toBe('dark')
+      expect(document.documentElement.dataset.theme).toBe('dark')
     } finally {
+      stop()
+      delete document.documentElement.dataset.theme
+      localStorage.removeItem(key)
       redirect.mockRestore()
     }
   })

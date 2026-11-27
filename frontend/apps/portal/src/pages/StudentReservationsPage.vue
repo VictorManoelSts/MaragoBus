@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { formatCivilDate } from '../utils/format-transport-date'
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal } from '@maragobus/shared'
 import { useTransportClock } from '../composables/useTransportClock'
@@ -28,6 +28,7 @@ const cancellationTarget = computed(() => store.studentReservations.find(item =>
 const cancellationResult = ref<ReturnType<typeof store.cancel> | null>(null)
 const cancellationFeedback = ref<HTMLElement>()
 const pageHeading = ref<HTMLElement>()
+const pageContent = ref<HTMLElement>()
 const deadlineMessage = 'Prazo de cancelamento encerrado. O limite é às 16h do dia da viagem (horário de Alagoas).'
 
 function deadlinePassed(date: string) {
@@ -54,6 +55,15 @@ watch(() => store.studentId, () => {
   cancellationResult.value = null
 })
 
+watch(reference, async () => {
+  const action = document.activeElement
+  if (!pageContent.value?.contains(action)
+    || !action?.hasAttribute('data-reservation-action')) return
+
+  await nextTick()
+  if (!action.isConnected && document.activeElement === document.body) pageHeading.value?.focus()
+})
+
 const groups = computed(() => {
   const date = today.value
   const reservations = store.studentReservations
@@ -74,7 +84,7 @@ const resultsAnnouncement = computed(() => {
 </script>
 
 <template>
-  <div class="student-reservations min-w-0 space-y-5">
+  <div ref="pageContent" class="min-w-0 space-y-5">
     <div class="space-y-3">
       <h1 ref="pageHeading" tabindex="-1" class="text-page">Minhas reservas</h1>
       <p class="max-w-prose text-helper text-muted">As reservas de demonstração ficam disponíveis até recarregar a aplicação.</p>
@@ -97,7 +107,7 @@ const resultsAnnouncement = computed(() => {
           class="flex min-h-11 items-center justify-center rounded-control px-1 text-center text-xs text-content wrap-anywhere
             hover:bg-surface peer-checked:bg-identity peer-checked:font-semibold peer-checked:text-on-primary
             peer-checked:hover:bg-identity peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2
-            peer-focus-visible:outline-identity sm:text-helper"
+            peer-focus-visible:outline-focus sm:text-helper"
         >{{ option.label }}</span>
       </label>
     </fieldset>
@@ -143,12 +153,14 @@ const resultsAnnouncement = computed(() => {
                   <div class="flex flex-wrap gap-2">
                     <BaseButton
                       v-if="!deadlinePassed(reservation.travelDate)" variant="outline" size="sm"
+                      data-reservation-action
                       class="w-full sm:w-auto" @click="cancellationId = reservation.id"
                     >
                       Cancelar reserva
                     </BaseButton>
                     <RouterLink
                       v-if="getReceiptAvailability(reservation, reference) === 'available'"
+                      data-reservation-action
                       :to="{ name: 'receipt' }" class="mb-button mb-button--primary mb-button--sm w-full sm:w-auto"
                     >
                       Ver comprovante
@@ -188,14 +200,3 @@ const resultsAnnouncement = computed(() => {
     </BaseModal>
   </div>
 </template>
-
-<style scoped>
-.student-reservations {
-  --mb-success: #166534;
-  --mb-success-surface: #ecfdf3;
-  --mb-success-border: #78aa89;
-  --mb-danger: #991b1b;
-  --mb-danger-surface: #fef2f2;
-  --mb-danger-border: #d69797;
-}
-</style>

@@ -80,6 +80,10 @@ Crie um relatório separado somente quando solicitado.
 
 ## References and skills
 
+- Antes de iniciar cada tarefa, verifique quais skills do Superpowers estão disponíveis e
+  são pertinentes. Use as skills aplicáveis ao planejamento, à implementação, à depuração,
+  aos testes e à revisão de código. Siga as instruções das skills efetivamente disponíveis,
+  sem presumir que todas estejam instaladas.
 - Consulte o [README](README.md) para instalação, arquitetura dos workspaces e comandos.
 - Consulte o [Design System](docs/etapas/02-design-system.md), a
   [paleta oficial](docs/etapas/04.1-paleta-oficial.md) e os
